@@ -1,0 +1,594 @@
+﻿@{
+    ViewData["Title"] = "Hourly Collection Report";
+}
+
+<style>
+    .nav-tabs .nav-link {
+        color: #495057;
+        border: 1px solid #dee2e6;
+    }
+
+        .nav-tabs .nav-link.active {
+            color: #495057;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-bottom: 3px solid #007bff;
+        }
+
+    .hour-total-row { background-color: #fff3cd !important; font-weight: bold; }
+    .hour-empty { color: #aaa; }
+</style>
+
+<div class="container-fluid">
+    <div class="page-header mb-4">
+        <h2><i class="fas fa-hourglass-half"></i> Hourly Collection Report</h2>
+        <p>Real-time hour-wise parking collection data from AMAAN_PMS database</p>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="hexited-tab" data-bs-toggle="tab" data-bs-target="#hExitedContent" type="button">
+                <i class="fas fa-car"></i> Hourly Collection [Exited Cars]
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="htrans-tab" data-bs-toggle="tab" data-bs-target="#hTransContent" type="button">
+                <i class="fas fa-receipt"></i> Hourly Collection [Transactions]
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- ═══════════ TAB 1: EXITED CARS ═══════════ -->
+        <div class="tab-pane fade show active" id="hExitedContent">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Date</label>
+                                    <input type="date" id="dateExited" class="form-control date-input" />
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadHourly('exited')" class="btn btn-primary w-100"><i class="fas fa-search"></i> Show</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadHourlyDay('exited', 0)" class="btn btn-info w-100"><i class="fas fa-calendar-day"></i> Today</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadHourlyDay('exited', 1)" class="btn btn-secondary w-100"><i class="fas fa-calendar-minus"></i> Yesterday</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="exportHourly('exited')" class="btn btn-success w-100"><i class="fas fa-download"></i> Export Excel</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="clearHourly('exited')" class="btn btn-warning w-100"><i class="fas fa-redo"></i> Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Payment Method Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Hourly Payment Method Summary</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Hour</th>
+                                            <th class="text-end">Vehicles</th>
+                                            <th class="text-end">Cash Count</th>
+                                            <th class="text-end">Cash Amount</th>
+                                            <th class="text-end">M-Pesa Count</th>
+                                            <th class="text-end">M-Pesa Amount</th>
+                                            <th class="text-end">Paybill Count</th>
+                                            <th class="text-end">Paybill Amount</th>
+                                            <th class="text-end">FOC Count</th>
+                                            <th class="text-end">FOC Amount</th>
+                                            <th class="text-end">Other Count</th>
+                                            <th class="text-end">Other Amount</th>
+                                            <th class="text-end">Total Charges</th>
+                                            <th class="text-end">Discount</th>
+                                            <th class="text-end">Total Paid</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="exSummaryBody">
+                                        <tr><td colspan="15" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Payment Source Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Hourly Payment Source Summary</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th rowspan="2" style="vertical-align: middle;">Hour</th>
+                                            <th colspan="2" class="text-center">Server</th>
+                                            <th colspan="2" class="text-center">Paystation 1</th>
+                                            <th colspan="2" class="text-center">Paystation 2</th>
+                                            <th colspan="2" class="text-center">Paystation 3</th>
+                                            <th colspan="2" class="text-center">Paystation 4</th>
+                                            <th colspan="2" class="text-center">HHD1</th>
+                                            <th colspan="2" class="text-center">HHD2</th>
+                                            <th colspan="2" class="text-center">HHD3</th>
+                                            <th colspan="2" class="text-center">HHD4</th>
+                                            <th colspan="2" class="text-center">Web</th>
+                                            <th colspan="2" class="text-center">Total</th>
+                                        </tr>
+                                        <tr>
+                                            @for (int i = 0; i < 11; i++)
+                                            {
+                                                <th class="text-end">Count</th>
+                                                <th class="text-end">Amount</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody id="exDeviceBody">
+                                        <tr><td colspan="23" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction Details -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Transaction Details</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Hour</th>
+                                            <th>Transaction ID</th>
+                                            <th>Card Number</th>
+                                            <th>Card Name</th>
+                                            <th>Entry Time (DD-MM-YYYY HH:MM:SS)</th>
+                                            <th>Exit Time (DD-MM-YYYY HH:MM:SS)</th>
+                                            <th>Park Time</th>
+                                            <th>Charge (KES)</th>
+                                            <th>Paid (KES)</th>
+                                            <th>Discount (KES)</th>
+                                            <th>Pay Mode</th>
+                                            <th>Payment Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="exTxnBody">
+                                        <tr><td colspan="13" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ TAB 2: TRANSACTIONS ═══════════ -->
+        <div class="tab-pane fade" id="hTransContent">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Date</label>
+                                    <input type="date" id="dateTrans" class="form-control date-input" />
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadHourly('trans')" class="btn btn-primary w-100"><i class="fas fa-search"></i> Show</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadHourlyDay('trans', 0)" class="btn btn-info w-100"><i class="fas fa-calendar-day"></i> Today</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadHourlyDay('trans', 1)" class="btn btn-secondary w-100"><i class="fas fa-calendar-minus"></i> Yesterday</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="exportHourly('trans')" class="btn btn-success w-100"><i class="fas fa-download"></i> Export Excel</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="clearHourly('trans')" class="btn btn-warning w-100"><i class="fas fa-redo"></i> Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Payment Method Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Hourly Payment Method Summary</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Hour</th>
+                                            <th class="text-end">Transactions</th>
+                                            <th class="text-end">Cash Count</th>
+                                            <th class="text-end">Cash Amount</th>
+                                            <th class="text-end">M-Pesa Count</th>
+                                            <th class="text-end">M-Pesa Amount</th>
+                                            <th class="text-end">Paybill Count</th>
+                                            <th class="text-end">Paybill Amount</th>
+                                            <th class="text-end">FOC Count</th>
+                                            <th class="text-end">FOC Amount</th>
+                                            <th class="text-end">Other Count</th>
+                                            <th class="text-end">Other Amount</th>
+                                            <th class="text-end">Total Paid</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trSummaryBody">
+                                        <tr><td colspan="13" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Payment Source Summary -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Hourly Payment Source Summary</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th rowspan="2" style="vertical-align: middle;">Hour</th>
+                                            <th colspan="2" class="text-center">Server</th>
+                                            <th colspan="2" class="text-center">Paystation 1</th>
+                                            <th colspan="2" class="text-center">Paystation 2</th>
+                                            <th colspan="2" class="text-center">Paystation 3</th>
+                                            <th colspan="2" class="text-center">Paystation 4</th>
+                                            <th colspan="2" class="text-center">HHD1</th>
+                                            <th colspan="2" class="text-center">HHD2</th>
+                                            <th colspan="2" class="text-center">HHD3</th>
+                                            <th colspan="2" class="text-center">HHD4</th>
+                                            <th colspan="2" class="text-center">Web</th>
+                                            <th colspan="2" class="text-center">Total</th>
+                                        </tr>
+                                        <tr>
+                                            @for (int i = 0; i < 11; i++)
+                                            {
+                                                <th class="text-end">Count</th>
+                                                <th class="text-end">Amount</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trDeviceBody">
+                                        <tr><td colspan="23" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction Details -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Transaction Details</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Hour</th>
+                                            <th>Transaction ID</th>
+                                            <th>Card Number</th>
+                                            <th>Card Name</th>
+                                            <th>Entry Time (DD-MM-YYYY HH:MM:SS)</th>
+                                            <th>Validation Time (DD-MM-YYYY HH:MM:SS)</th>
+                                            <th>Amount (KES)</th>
+                                            <th>Pay Mode</th>
+                                            <th>Payment Source</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trTxnBody">
+                                        <tr><td colspan="11" class="text-center text-muted">Select date and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const API_BASE = '/Collection';
+        const DEVICES = ['Server', 'Paystation1', 'Paystation2', 'Paystation3', 'Paystation4', 'HHD1', 'HHD2', 'HHD3', 'HHD4', 'Web'];
+
+        const TABS = {
+            exited: {
+                dateId: 'dateExited', summaryBody: 'exSummaryBody', deviceBody: 'exDeviceBody', txnBody: 'exTxnBody',
+                loadUrl: '/GetHourlyData', exportUrl: '/ExportHourlyExcel',
+                summaryCols: [['count', 'n'], ['cashCount', 'n'], ['cashAmount', 'c'], ['mpesaCount', 'n'], ['mpesaAmount', 'c'],
+                    ['paybillCount', 'n'], ['paybillAmount', 'c'], ['focCount', 'n'], ['focAmount', 'c'],
+                    ['otherCount', 'n'], ['otherAmount', 'c'], ['totalCharges', 'c'], ['discount', 'c'], ['totalPaid', 'c']],
+                txnColspan: 13
+            },
+            trans: {
+                dateId: 'dateTrans', summaryBody: 'trSummaryBody', deviceBody: 'trDeviceBody', txnBody: 'trTxnBody',
+                loadUrl: '/GetHourlyTransactionData', exportUrl: '/ExportHourlyTransactionExcel',
+                summaryCols: [['count', 'n'], ['cashCount', 'n'], ['cashAmount', 'c'], ['mpesaCount', 'n'], ['mpesaAmount', 'c'],
+                    ['paybillCount', 'n'], ['paybillAmount', 'c'], ['focCount', 'n'], ['focAmount', 'c'],
+                    ['otherCount', 'n'], ['otherAmount', 'c'], ['totalPaid', 'c']],
+                txnColspan: 11
+            }
+        };
+
+        function localIsoDate(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function esc(v) {
+            if (v === null || v === undefined) return '';
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function formatCurrency(value) {
+            const n = parseFloat(value) || 0;
+            return 'KES ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const today = localIsoDate(new Date());
+            document.getElementById('dateExited').value = today;
+            document.getElementById('dateTrans').value = today;
+            applyDateFormatDisplay();
+        });
+
+        function applyDateFormatDisplay() {
+            document.querySelectorAll('input[type="date"].date-input').forEach(input => {
+                const wrapper = document.createElement('div');
+                wrapper.style.position = 'relative';
+                wrapper.style.display = 'inline-block';
+                wrapper.style.width = '100%';
+
+                const display = document.createElement('div');
+                display.style.position = 'absolute';
+                display.style.left = '12px';
+                display.style.top = '50%';
+                display.style.transform = 'translateY(-50%)';
+                display.style.pointerEvents = 'none';
+                display.style.zIndex = '1';
+                display.style.background = 'white';
+                display.style.padding = '0 5px';
+
+                input.parentNode.insertBefore(wrapper, input);
+                wrapper.appendChild(input);
+                wrapper.appendChild(display);
+
+                function updateDisplay() {
+                    if (input.value) {
+                        const date = new Date(input.value + 'T00:00:00');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+                        display.textContent = `${day}-${month}-${date.getFullYear()}`;
+                        input.style.color = 'transparent';
+                    } else {
+                        display.textContent = '';
+                        input.style.color = '';
+                    }
+                }
+                updateDisplay();
+                input.addEventListener('change', updateDisplay);
+            });
+        }
+
+        function loadHourlyDay(tab, daysAgo) {
+            const d = new Date();
+            d.setDate(d.getDate() - daysAgo);
+            const el = document.getElementById(TABS[tab].dateId);
+            el.value = localIsoDate(d);
+            el.dispatchEvent(new Event('change'));
+            loadHourly(tab);
+        }
+
+        async function loadHourly(tab) {
+            const cfg = TABS[tab];
+            const date = document.getElementById(cfg.dateId).value;
+            if (!date) { alert('Please select a date'); return; }
+
+            try {
+                const response = await fetch(API_BASE + cfg.loadUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Date: date })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    renderSummary(cfg, result.hours);
+                    renderDevices(cfg, result.hours);
+                    if (tab === 'exited') renderExitedTxns(cfg, result.transactions);
+                    else renderTransTxns(cfg, result.transactions);
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load data: ' + error.message);
+            }
+        }
+
+        function renderSummary(cfg, hours) {
+            const tbody = document.getElementById(cfg.summaryBody);
+            tbody.innerHTML = '';
+            const cols = cfg.summaryCols;
+            if (!hours || hours.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="text-center">No data found</td></tr>`;
+                return;
+            }
+
+            const totals = {};
+            cols.forEach(c => totals[c[0]] = 0);
+
+            hours.forEach(h => {
+                let tds = `<td><strong>${esc(h.label)}</strong></td>`;
+                cols.forEach(c => {
+                    const v = parseFloat(h[c[0]]) || 0;
+                    totals[c[0]] += v;
+                    tds += `<td class="text-end ${v === 0 ? 'hour-empty' : ''}">${c[1] === 'c' ? formatCurrency(v) : v}</td>`;
+                });
+                const tr = document.createElement('tr');
+                tr.innerHTML = tds;
+                tbody.appendChild(tr);
+            });
+
+            let tt = '<td><strong>Total</strong></td>';
+            cols.forEach(c => {
+                tt += `<td class="text-end"><strong>${c[1] === 'c' ? formatCurrency(totals[c[0]]) : totals[c[0]]}</strong></td>`;
+            });
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'hour-total-row';
+            totalRow.innerHTML = tt;
+            tbody.appendChild(totalRow);
+        }
+
+        function renderDevices(cfg, hours) {
+            const tbody = document.getElementById(cfg.deviceBody);
+            tbody.innerHTML = '';
+            if (!hours || hours.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="23" class="text-center">No data found</td></tr>';
+                return;
+            }
+
+            const tc = {}, ta = {};
+            DEVICES.forEach(d => { tc[d] = 0; ta[d] = 0; });
+            let grandCount = 0, grandAmount = 0;
+
+            hours.forEach(h => {
+                let tds = `<td><strong>${esc(h.label)}</strong></td>`;
+                DEVICES.forEach(d => {
+                    const c = parseInt((h.deviceCount || {})[d]) || 0;
+                    const a = parseFloat((h.deviceAmount || {})[d]) || 0;
+                    tc[d] += c; ta[d] += a;
+                    tds += `<td class="text-end ${c === 0 ? 'hour-empty' : ''}">${c}</td><td class="text-end ${a === 0 ? 'hour-empty' : ''}">${formatCurrency(a)}</td>`;
+                });
+                const rc = parseInt(h.count) || 0;
+                const ra = parseFloat(h.totalPaid) || 0;
+                grandCount += rc; grandAmount += ra;
+                tds += `<td class="text-end"><strong>${rc}</strong></td><td class="text-end"><strong>${formatCurrency(ra)}</strong></td>`;
+                const tr = document.createElement('tr');
+                tr.innerHTML = tds;
+                tbody.appendChild(tr);
+            });
+
+            let tt = '<td><strong>Total</strong></td>';
+            DEVICES.forEach(d => {
+                tt += `<td class="text-end"><strong>${tc[d]}</strong></td><td class="text-end"><strong>${formatCurrency(ta[d])}</strong></td>`;
+            });
+            tt += `<td class="text-end"><strong>${grandCount}</strong></td><td class="text-end"><strong>${formatCurrency(grandAmount)}</strong></td>`;
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'hour-total-row';
+            totalRow.innerHTML = tt;
+            tbody.appendChild(totalRow);
+        }
+
+        function renderExitedTxns(cfg, txns) {
+            const tbody = document.getElementById(cfg.txnBody);
+            tbody.innerHTML = '';
+            if (!txns || txns.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${cfg.txnColspan}" class="text-center">No transactions found</td></tr>`;
+                return;
+            }
+            txns.forEach((t, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${esc(t.hourLabel)}</td>
+                    <td>${esc(t.transactionId) || 'N/A'}</td>
+                    <td>${esc(t.cardNo) || 'N/A'}</td>
+                    <td>${esc(t.cardName) || 'N/A'}</td>
+                    <td>${esc(t.entryTime)}</td>
+                    <td>${esc(t.exitTime)}</td>
+                    <td>${esc(t.parkTime)}</td>
+                    <td class="text-end">${formatCurrency(t.charge)}</td>
+                    <td class="text-end">${formatCurrency(t.paid)}</td>
+                    <td class="text-end">${formatCurrency(t.discount)}</td>
+                    <td>${esc(t.payMode) || 'N/A'}</td>
+                    <td>${esc(t.paySource) || 'N/A'}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderTransTxns(cfg, txns) {
+            const tbody = document.getElementById(cfg.txnBody);
+            tbody.innerHTML = '';
+            if (!txns || txns.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${cfg.txnColspan}" class="text-center">No transactions found</td></tr>`;
+                return;
+            }
+            txns.forEach((t, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${esc(t.hourLabel)}</td>
+                    <td>${esc(t.transactionId) || 'N/A'}</td>
+                    <td>${esc(t.cardNo) || 'N/A'}</td>
+                    <td>${esc(t.cardName) || 'N/A'}</td>
+                    <td>${esc(t.entryTime)}</td>
+                    <td>${esc(t.validationTime)}</td>
+                    <td class="text-end">${formatCurrency(t.amount)}</td>
+                    <td>${esc(t.payMode) || 'N/A'}</td>
+                    <td>${esc(t.paySource) || 'N/A'}</td>
+                    <td>${esc(t.status) || 'N/A'}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function exportHourly(tab) {
+            const cfg = TABS[tab];
+            const date = document.getElementById(cfg.dateId).value;
+            if (!date) { alert('Please select a date'); return; }
+            window.location.href = `${API_BASE}${cfg.exportUrl}?date=${date}`;
+        }
+
+        function clearHourly(tab) {
+            const cfg = TABS[tab];
+            const msg = (n) => `<tr><td colspan="${n}" class="text-center text-muted">Select date and click "Show"</td></tr>`;
+            document.getElementById(cfg.summaryBody).innerHTML = msg(cfg.summaryCols.length + 1);
+            document.getElementById(cfg.deviceBody).innerHTML = msg(23);
+            document.getElementById(cfg.txnBody).innerHTML = msg(cfg.txnColspan);
+        }
+    </script>
+}

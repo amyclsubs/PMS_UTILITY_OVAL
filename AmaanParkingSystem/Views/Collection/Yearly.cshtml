@@ -1,0 +1,287 @@
+﻿@{
+    ViewData["Title"] = "Yearly Collection Report";
+}
+
+<style>
+    .nav-tabs .nav-link {
+        color: #495057;
+        border: 1px solid #dee2e6;
+    }
+
+        .nav-tabs .nav-link.active {
+            color: #495057;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-bottom: 3px solid #007bff;
+        }
+
+    .year-total-row { background-color: #fff3cd !important; font-weight: bold; }
+    .year-empty { color: #aaa; }
+</style>
+
+<div class="container-fluid">
+    <div class="page-header mb-4">
+        <h2><i class="fas fa-calendar"></i> Yearly Collection Report</h2>
+        <p>Month-wise parking collection for the selected year from AMAAN_PMS database</p>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="yexited-tab" data-bs-toggle="tab" data-bs-target="#yExitedContent" type="button">
+                <i class="fas fa-car"></i> Yearly Collection [Exited Cars]
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="ytrans-tab" data-bs-toggle="tab" data-bs-target="#yTransContent" type="button">
+                <i class="fas fa-receipt"></i> Yearly Collection [Transactions]
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- ═══════════ TAB 1: EXITED CARS ═══════════ -->
+        <div class="tab-pane fade show active" id="yExitedContent">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Year</label>
+                                    <select id="yearExited" class="form-select">
+                                        @for (var y = DateTime.Now.Year; y >= 2020; y--)
+                                        {
+                                            <option value="@y">@y</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadYearly('exited')" class="btn btn-primary w-100"><i class="fas fa-search"></i> Show</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadYearlyOffset('exited', 0)" class="btn btn-info w-100"><i class="fas fa-calendar-day"></i> This Year</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadYearlyOffset('exited', 1)" class="btn btn-secondary w-100"><i class="fas fa-calendar-minus"></i> Previous Year</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="exportYearly('exited')" class="btn btn-success w-100"><i class="fas fa-download"></i> Export Excel</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="clearYearly('exited')" class="btn btn-warning w-100"><i class="fas fa-redo"></i> Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Monthly Summary (Exited Cars)</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light" id="exitedHead"></thead>
+                                    <tbody id="exitedBody">
+                                        <tr><td colspan="18" class="text-center text-muted">Select year and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ TAB 2: TRANSACTIONS ═══════════ -->
+        <div class="tab-pane fade" id="yTransContent">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Year</label>
+                                    <select id="yearTrans" class="form-select">
+                                        @for (var y = DateTime.Now.Year; y >= 2020; y--)
+                                        {
+                                            <option value="@y">@y</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="loadYearly('trans')" class="btn btn-primary w-100"><i class="fas fa-search"></i> Show</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadYearlyOffset('trans', 0)" class="btn btn-info w-100"><i class="fas fa-calendar-day"></i> This Year</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="loadYearlyOffset('trans', 1)" class="btn btn-secondary w-100"><i class="fas fa-calendar-minus"></i> Previous Year</button>
+                                </div>
+                                <div class="col-md-2">
+                                    <button onclick="exportYearly('trans')" class="btn btn-success w-100"><i class="fas fa-download"></i> Export Excel</button>
+                                </div>
+                                <div class="col-md-1">
+                                    <button onclick="clearYearly('trans')" class="btn btn-warning w-100"><i class="fas fa-redo"></i> Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-light"><h5 class="card-title mb-0">Monthly Summary (Transactions)</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover">
+                                    <thead class="table-light" id="transHead"></thead>
+                                    <tbody id="transBody">
+                                        <tr><td colspan="17" class="text-center text-muted">Select year and click "Show"</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const API_BASE = '/Collection';
+
+        // [key, header, type]  n = number, c = currency
+        const TABS = {
+            exited: {
+                yearId: 'yearExited', headId: 'exitedHead', bodyId: 'exitedBody',
+                loadUrl: '/GetYearlyExitedCarsData', exportUrl: '/ExportYearlyExcel',
+                cols: [
+                    ['totalVehicles', 'Vehicles', 'n'], ['cashCount', 'Cash Count', 'n'], ['cashTotal', 'Cash (KES)', 'c'],
+                    ['mPesaCount', 'M-Pesa Count', 'n'], ['mPesaTotal', 'M-Pesa (KES)', 'c'],
+                    ['focCount', 'FOC Count', 'n'], ['focAmount', 'FOC Amount (KES)', 'c'],
+                    ['ctmFocCount', 'HHD-4 FOC Count', 'n'], ['ctmFocAmount', 'HHD-4 FOC Amount (KES)', 'c'],
+                    ['zeroChargeCount', 'Zero Charge Count', 'n'], ['permanentParkersCount', 'Permanent Parkers', 'n'],
+                    ['revalidationCount', 'Revalidation Count', 'n'], ['revalidationAmount', 'Revalidation Amt (KES)', 'c'],
+                    ['totalCharges', 'Total Charges (KES)', 'c'], ['discount', 'Discount (KES)', 'c'],
+                    ['totalPaid', 'Total Paid (KES)', 'c'], ['vipCount', 'VIP', 'n']
+                ]
+            },
+            trans: {
+                yearId: 'yearTrans', headId: 'transHead', bodyId: 'transBody',
+                loadUrl: '/GetYearlyTransactionsData', exportUrl: '/ExportYearlyTransactionsExcel',
+                cols: [
+                    ['totalVehicles', 'Vehicles', 'n'], ['totalTransactions', 'Transactions', 'n'],
+                    ['cashCount', 'Cash Count', 'n'], ['cashTotal', 'Cash (KES)', 'c'],
+                    ['mPesaCount', 'M-Pesa Count', 'n'], ['mPesaTotal', 'M-Pesa (KES)', 'c'],
+                    ['cashTopUpCount', 'Cash Count (TOP-UP)', 'n'], ['cashTopUpTotal', 'Cash (KES) (TOP-UP)', 'c'],
+                    ['mPesaTopUpCount', 'M-Pesa Count (TOP-UP)', 'n'], ['mPesaTopUpTotal', 'M-Pesa (KES) (TOP-UP)', 'c'],
+                    ['focCount', 'FOC Count', 'n'], ['focAmount', 'FOC Amount (KES)', 'c'],
+                    ['ctmFocCount', 'HHD-4 FOC Count', 'n'], ['ctmFocAmount', 'HHD-4 FOC Amount (KES)', 'c'],
+                    ['totalChargedAmount', 'Total Charged (KES)', 'c'], ['totalCollected', 'Total Collected (KES)', 'c']
+                ]
+            }
+        };
+
+        function esc(v) {
+            if (v === null || v === undefined) return '';
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function formatCurrency(value) {
+            const n = parseFloat(value) || 0;
+            return 'KES ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            Object.keys(TABS).forEach(buildHead);
+        });
+
+        function buildHead(tab) {
+            const cfg = TABS[tab];
+            let h = '<tr><th>Month</th>';
+            cfg.cols.forEach(c => h += `<th class="text-end">${c[1]}</th>`);
+            h += '</tr>';
+            document.getElementById(cfg.headId).innerHTML = h;
+        }
+
+        function loadYearlyOffset(tab, yearsAgo) {
+            document.getElementById(TABS[tab].yearId).value = new Date().getFullYear() - yearsAgo;
+            loadYearly(tab);
+        }
+
+        async function loadYearly(tab) {
+            const cfg = TABS[tab];
+            const year = document.getElementById(cfg.yearId).value;
+            if (!year) { alert('Please select a year'); return; }
+
+            try {
+                const response = await fetch(`${API_BASE}${cfg.loadUrl}?year=${year}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderYearly(cfg, result.data);
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load data: ' + error.message);
+            }
+        }
+
+        function renderYearly(cfg, rows) {
+            const tbody = document.getElementById(cfg.bodyId);
+            tbody.innerHTML = '';
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${cfg.cols.length + 1}" class="text-center">No data found</td></tr>`;
+                return;
+            }
+
+            const totals = {};
+            cfg.cols.forEach(c => totals[c[0]] = 0);
+
+            rows.forEach(r => {
+                let tds = `<td><strong>${esc(r.label)}</strong></td>`;
+                cfg.cols.forEach(c => {
+                    const v = parseFloat(r[c[0]]) || 0;
+                    totals[c[0]] += v;
+                    tds += `<td class="text-end ${v === 0 ? 'year-empty' : ''}">${c[2] === 'c' ? formatCurrency(v) : v}</td>`;
+                });
+                const tr = document.createElement('tr');
+                tr.innerHTML = tds;
+                tbody.appendChild(tr);
+            });
+
+            let tt = '<td><strong>Total</strong></td>';
+            cfg.cols.forEach(c => {
+                tt += `<td class="text-end"><strong>${c[2] === 'c' ? formatCurrency(totals[c[0]]) : totals[c[0]]}</strong></td>`;
+            });
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'year-total-row';
+            totalRow.innerHTML = tt;
+            tbody.appendChild(totalRow);
+        }
+
+        function exportYearly(tab) {
+            const cfg = TABS[tab];
+            const year = document.getElementById(cfg.yearId).value;
+            if (!year) { alert('Please select a year'); return; }
+            window.location.href = `${API_BASE}${cfg.exportUrl}?year=${year}`;
+        }
+
+        function clearYearly(tab) {
+            const cfg = TABS[tab];
+            document.getElementById(cfg.bodyId).innerHTML =
+                `<tr><td colspan="${cfg.cols.length + 1}" class="text-center text-muted">Select year and click "Show"</td></tr>`;
+        }
+    </script>
+}

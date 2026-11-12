@@ -1,0 +1,413 @@
+﻿@{
+    ViewData["Title"] = "Occupancy Report";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .occ-card-value { font-size: 1.8rem; font-weight: 700; }
+    .occ-table { width: 100%; min-width: 900px; }
+    .occ-table th, .occ-table td { padding: 0.4rem 0.75rem; vertical-align: middle; white-space: nowrap; }
+    .occ-table th { background: #212529; color: #fff; text-align: center; }
+    .occ-table td.num { text-align: right; }
+    .badge-in      { background: #0d6efd; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+    .badge-out     { background: #fd7e14; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+    .occ-legend span { display: inline-block; margin-right: 14px; font-size: 0.8rem; }
+    .occ-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+</style>
+
+<div class="page-header">
+    <h2>Occupancy Report</h2>
+    <p>How full the parking was: cars inside vs total capacity, per hour, day, month and year.</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5></div>
+    <div class="card-body p-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label mb-1">Report Type</label>
+                <select id="reportType" class="form-select form-select-sm">
+                    <option value="hourly">Hourly</option>
+                    <option value="daily">Daily</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+            <div class="col-md-2" id="dailyFilter">
+                <label class="form-label mb-1">Date</label>
+                <input type="date" id="selectedDate" class="form-control form-control-sm"
+                       value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-2 d-none" id="monthFilter">
+                <label class="form-label mb-1">Month</label>
+                <select id="month" class="form-select form-select-sm">
+                    @for (int i = 1; i <= 12; i++)
+                    {
+                        <option value="@i" selected="@(i == DateTime.Now.Month)">
+                            @System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(i)
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2" id="yearFilter">
+                <label class="form-label mb-1">Year</label>
+                <input type="number" id="year" class="form-control form-control-sm" value="@DateTime.Now.Year" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" id="btnLoadReport">
+                    <i class="fas fa-search me-1"></i> Load Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row row-cols-1 row-cols-md-5 g-3 mb-3">
+    <div class="col">
+        <div class="card text-center border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1"><i class="fas fa-parking me-1"></i>Capacity</div>
+                <div class="occ-card-value text-secondary" id="cardCapacity">0</div>
+                <div class="text-muted" style="font-size:0.75rem;">Total bays</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1"><i class="fas fa-car me-1"></i>Inside</div>
+                <div class="occ-card-value" id="cardInside">0</div>
+                <div class="text-muted" style="font-size:0.75rem;" id="cardInsideSub">At end of latest period</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1"><i class="fas fa-check-circle me-1"></i>Available</div>
+                <div class="occ-card-value text-success" id="cardAvailable">0</div>
+                <div class="text-muted" style="font-size:0.75rem;">Free bays</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1"><i class="fas fa-arrow-up me-1"></i>Peak Occupancy</div>
+                <div class="occ-card-value" id="cardPeak">0</div>
+                <div class="text-muted" style="font-size:0.75rem;" id="cardPeakSub">-</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small mb-1"><i class="fas fa-percentage me-1"></i>Avg Occupancy</div>
+                <div class="occ-card-value" id="cardAvg">0%</div>
+                <div class="text-muted" style="font-size:0.75rem;" id="cardAvgSub">Average of period-end counts</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Inside vs Available</h6></div>
+            <div class="card-body"><canvas id="pieChart" height="200"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Occupancy % by Period</h6></div>
+            <div class="card-body"><canvas id="barChart" height="200"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Cars Inside vs Capacity</h6></div>
+            <div class="card-body"><canvas id="lineChart" height="200"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="fas fa-table me-2"></i>Occupancy Details</h6>
+        <div class="occ-legend">
+            <span><i class="occ-dot" style="background:#198754"></i>Below 60%</span>
+            <span><i class="occ-dot" style="background:#ffc107"></i>60 - 85%</span>
+            <span><i class="occ-dot" style="background:#dc3545"></i>Above 85%</span>
+        </div>
+    </div>
+    <div class="card-body p-3">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered table-hover occ-table">
+                <thead id="reportTableHead"></thead>
+                <tbody id="reportTableBody">
+                    <tr><td colspan="8" class="text-center text-muted">No data loaded.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="text-muted small mt-2">
+            Opening + Entries - Exits = Closing (cars inside at end of period).
+            Peak = highest number of cars inside at any moment in the period.
+            Occupancy % = Closing / Capacity.
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let pieChart = null, barChart = null, lineChart = null;
+    let CAPACITY = 500;
+    const COLS = 8;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        toggleFilters();
+        loadOccupancyReport();
+        document.getElementById('reportType').addEventListener('change', function () {
+            toggleFilters();
+            loadOccupancyReport();
+        });
+        document.getElementById('btnLoadReport').addEventListener('click', loadOccupancyReport);
+    });
+
+    function toggleFilters() {
+        const t = document.getElementById('reportType').value;
+        document.getElementById('dailyFilter').classList.toggle('d-none', !(t === 'daily' || t === 'hourly'));
+        document.getElementById('monthFilter').classList.toggle('d-none', t !== 'monthly');
+        document.getElementById('yearFilter').classList.toggle('d-none', t === 'daily' || t === 'hourly');
+    }
+
+    function loadOccupancyReport() {
+        const t = document.getElementById('reportType').value;
+        let url = '', body = '';
+
+        if (t === 'hourly') {
+            url = '/AccessReport/GetHourlyOccupancy';
+            body = `selectedDate=${encodeURIComponent(document.getElementById('selectedDate').value)}`;
+        } else if (t === 'daily') {
+            url = '/AccessReport/GetDailyOccupancy';
+            body = `selectedDate=${encodeURIComponent(document.getElementById('selectedDate').value)}`;
+        } else if (t === 'monthly') {
+            url = '/AccessReport/GetMonthlyOccupancy';
+            body = `month=${encodeURIComponent(document.getElementById('month').value)}&year=${encodeURIComponent(document.getElementById('year').value)}`;
+        } else {
+            url = '/AccessReport/GetYearlyOccupancy';
+            body = `year=${encodeURIComponent(document.getElementById('year').value)}`;
+        }
+
+        document.getElementById('reportTableBody').innerHTML =
+            `<tr><td colspan="${COLS}" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Loading...</td></tr>`;
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) {
+                document.getElementById('reportTableBody').innerHTML =
+                    `<tr><td colspan="${COLS}" class="text-center text-danger">${res.message || 'Failed to load.'}</td></tr>`;
+                return;
+            }
+            if (res.capacity) CAPACITY = res.capacity;
+
+            let rows = [];
+            if (t === 'hourly') {
+                rows = (res.data || []).map(x => toRow(x, x.hour_label));
+            } else if (t === 'daily') {
+                if (res.data) rows = [toRow(res.data, formatDate(res.data.report_date))];
+            } else if (t === 'monthly') {
+                rows = (res.data || []).map(x => toRow(x, formatDate(x.report_date)));
+            } else {
+                rows = (res.data || []).map(x => toRow(x, x.month_name));
+            }
+            renderReport(t, rows);
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('reportTableBody').innerHTML =
+                `<tr><td colspan="${COLS}" class="text-center text-danger">Error loading report.</td></tr>`;
+        });
+    }
+
+    function toRow(x, label) {
+        return {
+            label: label || '',
+            opening: x.opening || 0,
+            entered: x.total_entered || 0,
+            exited: x.total_exited || 0,
+            closing: x.still_inside || 0,
+            peak: x.peak_inside || 0
+        };
+    }
+
+    // ── MAIN RENDER ───────────────────────────────────────────
+    function renderReport(type, rows) {
+        const periodName = type === 'hourly' ? 'Hour' : type === 'daily' ? 'Date' : type === 'monthly' ? 'Day' : 'Month';
+
+        document.getElementById('reportTableHead').innerHTML = `
+            <tr>
+                <th>${periodName}</th>
+                <th>Opening</th>
+                <th><span class="badge-in">Entries</span></th>
+                <th><span class="badge-out">Exits</span></th>
+                <th>Closing (Inside)</th>
+                <th>Peak Inside</th>
+                <th style="min-width:200px">Occupancy %</th>
+                <th>Available</th>
+            </tr>`;
+
+        if (!rows.length) {
+            document.getElementById('reportTableBody').innerHTML =
+                `<tr><td colspan="${COLS}" class="text-center text-muted">No records found.</td></tr>`;
+            setCards(null, rows, type);
+            renderCharts(type, rows);
+            return;
+        }
+
+        let html = '';
+        rows.forEach(r => {
+            const p = pct(r.closing);
+            const pp = pct(r.peak);
+            const avail = Math.max(CAPACITY - r.closing, 0);
+            html += `
+                <tr>
+                    <td><strong>${r.label}</strong></td>
+                    <td class="num">${r.opening}</td>
+                    <td class="num">${r.entered}</td>
+                    <td class="num">${r.exited}</td>
+                    <td class="num"><strong>${r.closing}</strong></td>
+                    <td class="num">${r.peak} <span class="text-muted small">(${pp.toFixed(1)}%)</span></td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:14px;">
+                                <div class="progress-bar" role="progressbar"
+                                     style="width:${Math.min(Math.max(p, 0), 100)}%;background:${colorFor(p)};"></div>
+                            </div>
+                            <span class="small fw-bold" style="min-width:48px;text-align:right;">${p.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td class="num">${avail}</td>
+                </tr>`;
+        });
+        document.getElementById('reportTableBody').innerHTML = html;
+
+        setCards(rows[rows.length - 1], rows, type);
+        renderCharts(type, rows);
+    }
+
+    // ── CARDS ─────────────────────────────────────────────────
+    function setCards(latest, rows, type) {
+        document.getElementById('cardCapacity').textContent = CAPACITY;
+
+        if (!latest) {
+            ['cardInside', 'cardAvailable', 'cardPeak'].forEach(id => document.getElementById(id).textContent = '0');
+            document.getElementById('cardAvg').textContent = '0%';
+            document.getElementById('cardPeakSub').textContent = '-';
+            return;
+        }
+
+        const inside = latest.closing;
+        const p = pct(inside);
+        const insideEl = document.getElementById('cardInside');
+        insideEl.textContent = inside;
+        insideEl.style.color = colorFor(p);
+        document.getElementById('cardInsideSub').textContent = p.toFixed(1) + '% full (' + latest.label + ')';
+        document.getElementById('cardAvailable').textContent = Math.max(CAPACITY - inside, 0);
+
+        let peakRow = rows[0];
+        rows.forEach(r => { if (r.peak > peakRow.peak) peakRow = r; });
+        const peakPct = pct(peakRow.peak);
+        const peakEl = document.getElementById('cardPeak');
+        peakEl.textContent = peakRow.peak;
+        peakEl.style.color = colorFor(peakPct);
+        document.getElementById('cardPeakSub').textContent = peakPct.toFixed(1) + '% at ' + peakRow.label;
+
+        const avgEl = document.getElementById('cardAvg');
+        if (type === 'daily') {
+            avgEl.textContent = '-';
+            avgEl.style.color = '';
+            document.getElementById('cardAvgSub').textContent = 'Use Hourly view for averages';
+        } else {
+            const avg = rows.reduce((s, r) => s + pct(r.closing), 0) / rows.length;
+            avgEl.textContent = avg.toFixed(1) + '%';
+            avgEl.style.color = colorFor(avg);
+            document.getElementById('cardAvgSub').textContent = 'Average of period-end counts';
+        }
+    }
+
+    // ── CHARTS ────────────────────────────────────────────────
+    function renderCharts(type, rows) {
+        const latest = rows.length ? rows[rows.length - 1] : { closing: 0, label: '' };
+        renderPie(latest.closing);
+
+        const labels = rows.map(r => r.label);
+        renderBar(labels, rows.map(r => +pct(r.closing).toFixed(1)), rows.map(r => +pct(r.peak).toFixed(1)));
+
+        if (type === 'daily' && rows.length) {
+            const r = rows[0];
+            renderLine(['Opening', 'Peak', 'Closing'],
+                [{ label: 'Cars inside', data: [r.opening, r.peak, r.closing], borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: false, tension: 0.3 }]);
+        } else {
+            renderLine(labels, [
+                { label: 'Inside (period end)', data: rows.map(r => r.closing), borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: false, tension: 0.3 },
+                { label: 'Peak inside', data: rows.map(r => r.peak), borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.1)', fill: false, tension: 0.3 }
+            ]);
+        }
+    }
+
+    function renderPie(inside) {
+        const ctx = document.getElementById('pieChart').getContext('2d');
+        if (pieChart) pieChart.destroy();
+        const ins = Math.max(inside, 0);
+        pieChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Inside', 'Available'],
+                datasets: [{ data: [ins, Math.max(CAPACITY - ins, 0)], backgroundColor: [colorFor(pct(ins)), '#dee2e6'] }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    function renderBar(labels, closingPct, peakPct) {
+        const ctx = document.getElementById('barChart').getContext('2d');
+        if (barChart) barChart.destroy();
+        barChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Closing %', data: closingPct, backgroundColor: closingPct.map(colorFor) },
+                    { label: 'Peak %', data: peakPct, backgroundColor: 'rgba(108,117,125,0.45)' }
+                ]
+            },
+            options: { responsive: true, scales: { y: { beginAtZero: true, suggestedMax: 100 } } }
+        });
+    }
+
+    function renderLine(labels, datasets) {
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        if (lineChart) lineChart.destroy();
+        const cap = {
+            label: 'Capacity', data: labels.map(() => CAPACITY),
+            borderColor: '#dc3545', borderDash: [6, 4], pointRadius: 0, fill: false
+        };
+        lineChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets.concat([cap]) },
+            options: { responsive: true, scales: { y: { beginAtZero: true, suggestedMax: CAPACITY } } }
+        });
+    }
+
+    // ── HELPERS ───────────────────────────────────────────────
+    function pct(v) { return CAPACITY > 0 ? (v * 100.0 / CAPACITY) : 0; }
+    function colorFor(p) { return p > 85 ? '#dc3545' : (p >= 60 ? '#ffc107' : '#198754'); }
+    function formatDate(v) { return v ? v.split('T')[0] : ''; }
+</script>
+}
