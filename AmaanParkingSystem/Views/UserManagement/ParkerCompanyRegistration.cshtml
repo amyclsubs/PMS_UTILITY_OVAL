@@ -128,10 +128,14 @@
                         </div>
                     </div>
                     <div class="col-md-2">
+                        <label class="form-label mb-0">Cars Allowed</label>
+                        <input type="number" name="CarsAllowedInput" id="carsAllowedInput" class="form-control" placeholder="e.g. 5" min="0" />
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label mb-0">Card Limit</label>
                         <input type="number" name="CardLimitInput" id="cardLimitInput" class="form-control" placeholder="e.g. 50" min="0" />
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <label class="form-label mb-0">Status *</label>
                         <select asp-for="car_parkers_status" class="form-select" required>
                             <option value="">--Select--</option>
@@ -834,6 +838,12 @@
     if (cardLimitValue && cardLimitValue !== '0') {
         document.getElementById('cardLimitInput').value = cardLimitValue;
     }
+
+               // Pre-fill Cars Allowed field in edit mode
+                var carsAllowedValue = '@Model.Total_Cars_allowed';
+                if (carsAllowedValue !== '') {
+                    document.getElementById('carsAllowedInput').value = carsAllowedValue;
+                }
 
                 // Pre-fill Negative Balance checkbox
                     var negBalValue = parseInt('@Model.Neg_Balance_allowed') || 0;

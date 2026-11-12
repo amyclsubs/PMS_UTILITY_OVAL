@@ -29,5 +29,6 @@
         public string? card_parkers_company_password { get; set; }
         public int? Neg_Balance_allowed { get; set; }  // <-- ADD THIS LINE
         public decimal? Balance_Amount { get; set; }
+        public string Total_Cars_allowed { get; set; }
     }
 }

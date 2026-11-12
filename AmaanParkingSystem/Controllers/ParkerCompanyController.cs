@@ -518,7 +518,7 @@ namespace AmaanParkingSystem.Controllers
 
         // AJAX endpoint to generate sub company ID
         [HttpPost]
-        public IActionResult AddOrEditParkerCompany(ParkerCompanyModel model, string NegBalAllowed, string CardLimitInput)
+        public IActionResult AddOrEditParkerCompany(ParkerCompanyModel model, string NegBalAllowed, string CardLimitInput, string CarsAllowedInput)
         {
             using var conn = new SqlConnection(GetDynamicConnectionString());
             var currentUser = GetLoggedInUser();
@@ -600,6 +600,9 @@ WHERE car_parkers_company_id = @companyId
             // ✅ Parse card limit (null if empty/invalid)
             string cardLimitValue = string.IsNullOrWhiteSpace(CardLimitInput) ? null : CardLimitInput.Trim();
 
+            // ✅ Parse cars allowed (null if empty/invalid)
+            string carsAllowedValue = string.IsNullOrWhiteSpace(CarsAllowedInput) ? null : CarsAllowedInput.Trim();
+
             if (model.id > 0)
             {
                 // ✅ UPDATE
@@ -620,6 +623,7 @@ WHERE car_parkers_company_id = @companyId
                 car_parkers_status               = @car_parkers_status,
                 card_parkers_company_password    = @password,
                 Neg_Balance_allowed              = @negBalAllowed,
+                Total_Cars_allowed               = @carsAllowed,
                 Total_Card_Limit_Under_Sub_Co    = @cardLimit,
                 updated_by                       = @updatedBy,
                 updated_on                       = GETDATE()
@@ -643,6 +647,7 @@ WHERE car_parkers_company_id = @companyId
                         password = model.card_parkers_company_password,
                         negBalAllowed = negBalAllowedValue,
                         cardLimit = cardLimitValue,
+                        carsAllowed = carsAllowedValue,
                         updatedBy = currentUser
                     });
 
@@ -680,7 +685,7 @@ WHERE car_parkers_company_id = @companyId
              sub_co_car_parkers_contact_number, sub_co_car_parkers_address,
              sub_co_car_parkers_pin, sub_co_car_parkers_vat, car_parkers_status,
              card_parkers_company_password, Neg_Balance_allowed, 
-             Total_Card_Limit_Under_Sub_Co, Total_Paid_Amount, 
+             Total_Card_Limit_Under_Sub_Co, Total_Cars_allowed, Total_Paid_Amount, 
              Total_Deducted_Amount, created_by, created_on)
             VALUES
             (@newId, @customer_id, @car_parkers_company_id, @car_parkers_company_name,
@@ -688,7 +693,7 @@ WHERE car_parkers_company_id = @companyId
              @sub_co_car_parkers_contact_person, @sub_co_car_parkers_email,
              @sub_co_car_parkers_contact_number, @sub_co_car_parkers_address,
              @sub_co_car_parkers_pin, @sub_co_car_parkers_vat, @car_parkers_status,
-             @password, @negBalAllowed, @cardLimit,
+             @password, @negBalAllowed, @cardLimit, @carsAllowed,
              0.00, 0.00, @createdBy, GETDATE())",
                     new
                     {
@@ -709,6 +714,7 @@ WHERE car_parkers_company_id = @companyId
                         password = model.card_parkers_company_password,
                         negBalAllowed = negBalAllowedValue,
                         cardLimit = cardLimitValue,
+                        carsAllowed = carsAllowedValue,
                         createdBy = currentUser
                     });
 
