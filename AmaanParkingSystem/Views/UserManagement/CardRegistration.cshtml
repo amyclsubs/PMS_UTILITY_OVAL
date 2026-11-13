@@ -5,6 +5,8 @@
     var isEdit = ViewBag.IsEdit ?? false;
     var zones = ViewBag.Zones as List<dynamic> ?? new List<dynamic>();
     var accessRightsBinary = Model.access_rights ?? "";
+    var vacantParkings = ViewBag.VacantParkings as List<dynamic> ?? new List<dynamic>();
+    string currentParkingNo = ViewBag.CurrentParkingNo as string ?? "";
     // Get duplicate plate numbers from ViewBag
     var duplicatePlateNumbers = ViewBag.DuplicatePlateNumbers as HashSet<string> ?? new HashSet<string>();
     // Find duplicate Owner Contact numbers
@@ -106,6 +108,24 @@
                     <div class="col-md-1">
                         <label class="form-label">Expiry</label>
                         <input asp-for="expiry_date" type="date" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <!-- Row: Parking Allocation (vacant only) -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Allocate Parking (Vacant only)</label>
+                        <select name="allocated_parking_no" id="parkingDropdown" class="form-control form-control-sm">
+                            <option value="">-- No Parking --</option>
+                            @foreach (var vp in vacantParkings)
+                            {
+                                string vpNo = vp.parking_no;
+                                string vpZone = vp.zone_name;
+                                string vpText = string.IsNullOrEmpty(vpZone) ? vpNo : vpNo + " (" + vpZone + ")";
+                                bool vpSelected = !string.IsNullOrEmpty(currentParkingNo) && vpNo == currentParkingNo;
+                                <option value="@vpNo" selected="@vpSelected">@vpText</option>
+                            }
+                        </select>
                     </div>
                 </div>
 

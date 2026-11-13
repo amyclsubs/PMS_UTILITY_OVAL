@@ -190,6 +190,34 @@ public class UserManagementController : BaseController
             .ToHashSet();
 
         ViewBag.IsEdit = isEdit;
+
+        // ===== Vacant parking list for allocation dropdown =====
+        string currentParking = "";
+        if (id.HasValue && id.Value > 0)
+        {
+            currentParking = conn.QueryFirstOrDefault<string>(@"
+                SELECT CAST(parking_no AS NVARCHAR(100))
+                FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                WHERE id = @id", new { id = id.Value }) ?? "";
+            currentParking = currentParking.Trim();
+        }
+        ViewBag.CurrentParkingNo = currentParking;
+        ViewBag.VacantParkings = conn.Query(@"
+            SELECT CAST(pl.parking_no AS NVARCHAR(100)) AS parking_no,
+                   ISNULL(zn.zone_name, '') AS zone_name
+            FROM [AMAAN_PMS].[dbo].[db_tbl_31_Parking_layout] pl
+            OUTER APPLY (
+                SELECT TOP 1 z.zone_name
+                FROM [AMAAN_PMS].[dbo].[db_tbl_04_zones] z
+                WHERE CAST(z.zone_id AS NVARCHAR(100)) = CAST(pl.zone_id AS NVARCHAR(100))
+            ) zn
+            WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated] ca
+                    WHERE ca.parking_no IS NOT NULL
+                      AND LTRIM(RTRIM(CAST(ca.parking_no AS NVARCHAR(100)))) = LTRIM(RTRIM(CAST(pl.parking_no AS NVARCHAR(100)))))
+               OR (@cur <> '' AND LTRIM(RTRIM(CAST(pl.parking_no AS NVARCHAR(100)))) = @cur)
+            ORDER BY pl.parking_no", new { cur = currentParking }).ToList();
         return View(model);
     }
 
@@ -666,7 +694,7 @@ public class UserManagementController : BaseController
     }
 
     [HttpPost]
-    public IActionResult AddOrEditCard(CardRegistrationModel model, string[] zoneCheckboxes)
+    public IActionResult AddOrEditCard(CardRegistrationModel model, string[] zoneCheckboxes, string allocated_parking_no = null)
     {
         using (var conn = new SqlConnection(GetDynamicConnectionString()))
         {
@@ -728,6 +756,32 @@ public class UserManagementController : BaseController
                 return RedirectToAction("CardRegistration", new { id = model.id });
             }
 
+            // ===== Parking allocation validation =====
+            string parkingToSave = string.IsNullOrWhiteSpace(allocated_parking_no) ? null : allocated_parking_no.Trim();
+            if (parkingToSave != null)
+            {
+                var parkingInLayout = conn.ExecuteScalar<int>(@"
+                    SELECT COUNT(*) FROM [AMAAN_PMS].[dbo].[db_tbl_31_Parking_layout]
+                    WHERE LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100)))) = @p",
+                    new { p = parkingToSave }) > 0;
+
+                var parkingTaken = conn.ExecuteScalar<int>(@"
+                    SELECT COUNT(*) FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                    WHERE LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100)))) = @p AND id <> @id",
+                    new { p = parkingToSave, model.id }) > 0;
+
+                if (!parkingInLayout || parkingTaken)
+                {
+                    TempData["ErrorMessage"] = parkingTaken
+                        ? $"Parking '{parkingToSave}' is already allocated to another card!"
+                        : $"Parking '{parkingToSave}' does not exist!";
+                    if (model.id > 0)
+                        return RedirectToAction("CardRegistration", new { id = model.id });
+                    else
+                        return RedirectToAction("CardRegistration");
+                }
+            }
+
             // Binary Rights Logic using 'conn'
             var zonesList = conn.Query("SELECT zone_name FROM [AMAAN_PMS].[dbo].[db_tbl_04_zones]").ToList();
             var binaryRights = new StringBuilder();
@@ -753,7 +807,7 @@ public class UserManagementController : BaseController
                     car_plate_no=@car_plate_no, card_type=@card_type, status=@status, 
                     fee_schedule_id=@fee_schedule_id, applicationform=@applicationform, 
                     expiry_date=@expiry_date, access_rights=@access_rights, antipassback=@antipassback, 
-                    grouped=@grouped, updated_by=@updated_by, updated_on=GETDATE()
+                    grouped=@grouped, parking_no=@parking_no, updated_by=@updated_by, updated_on=GETDATE()
                 WHERE id=@id", new
                 {
                     model.id,
@@ -773,6 +827,7 @@ public class UserManagementController : BaseController
                     model.applicationform,
                     model.expiry_date,
                     access_rights = assignedRights,
+                    parking_no = parkingToSave,
                     model.antipassback,
                     model.grouped,
                     updated_by = currentUser
@@ -786,7 +841,10 @@ public class UserManagementController : BaseController
                  cardno, cardname, car_owner_name, car_owner_contact_no, car_plate_no, card_type, status, 
                  fee_schedule_id, applicationform, expiry_date, access_rights, antipassback, grouped, created_by, created_on)
                 VALUES (@customer_id, @company_id, @company_name, @sub_id, @sub_name, @cardno, @cardname, @owner, @contact, 
-                        @plate, @ctype, @status, @fees, @app, @expiry, @rights, @apb, @grp, @user, GETDATE())", new
+                        @plate, @ctype, @status, @fees, @app, @expiry, @rights, @apb, @grp, @user, GETDATE());
+                UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                SET parking_no = @parking_no
+                WHERE id = SCOPE_IDENTITY() AND @parking_no IS NOT NULL;", new
                 {
                     customer_id = subCompanyInfo.customer_id,
                     company_id = subCompanyInfo.car_parkers_company_id,
@@ -806,6 +864,7 @@ public class UserManagementController : BaseController
                     rights = assignedRights,
                     apb = model.antipassback,
                     grp = model.grouped,
+                    parking_no = parkingToSave,
                     user = currentUser
                 });
             }
