@@ -9,6 +9,7 @@
     string currentParkingNo = ViewBag.CurrentParkingNo as string ?? "";
     // Get duplicate plate numbers from ViewBag
     var duplicatePlateNumbers = ViewBag.DuplicatePlateNumbers as HashSet<string> ?? new HashSet<string>();
+    var parkingMap = ViewBag.ParkingMap as Dictionary<string, string> ?? new Dictionary<string, string>();
     // Find duplicate Owner Contact numbers
     var ownerContactGroups = cardList
         .Where(c => !string.IsNullOrEmpty(c.car_owner_contact_no))
@@ -347,6 +348,7 @@
                         <th>Created On</th>
                         <th>Updated By</th>
                         <th>Updated On</th>
+                        <th>Parking No</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -448,6 +450,20 @@
                             <td>@(c.created_on?.ToString() ?? "-")</td>
                             <td>@c.updated_by</td>
                             <td>@(c.updated_on?.ToString() ?? "-")</td>
+                            <td style="text-align: center;">
+                                @{
+                                    var cParking = "";
+                                    if (parkingMap.TryGetValue(c.id.ToString(), out var pv)) { cParking = pv; }
+                                }
+                                @if (!string.IsNullOrEmpty(cParking))
+                                {
+                                    <strong class="text-success">@cParking</strong>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
                             <td style="white-space: nowrap;">
                                 @if (ViewBag.CanWrite == true)
                                 {

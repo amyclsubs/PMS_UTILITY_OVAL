@@ -150,6 +150,19 @@ public class UserManagementController : BaseController
     ", parameters).ToList();
 
         ViewBag.CardList = cardList;
+
+        // ===== Parking No per card (for list column) =====
+        var parkingMap = new Dictionary<string, string>();
+        foreach (var pr in conn.Query(@"
+            SELECT CAST(id AS NVARCHAR(50)) AS id,
+                   LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100)))) AS parking_no
+            FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+            WHERE parking_no IS NOT NULL
+              AND LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100)))) <> ''"))
+        {
+            parkingMap[(string)pr.id] = (string)pr.parking_no;
+        }
+        ViewBag.ParkingMap = parkingMap;
         ViewBag.SortColumn = sortColumn;
         ViewBag.SortOrder = sortOrder;
 
