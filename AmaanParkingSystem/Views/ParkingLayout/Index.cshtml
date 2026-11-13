@@ -5,9 +5,9 @@
     var zones = Model ?? new List<AmaanParkingSystem.Controllers.ParkingLayoutZoneVm>();
     var operatorType = Context.Session.GetString("OperatorType") ?? string.Empty;
     var canWrite = !string.Equals(operatorType, "OPERATOR", StringComparison.OrdinalIgnoreCase);
-    var totalZones = zones.Count;
-    var activeZones = zones.Count(z => z.IsActive);
-    var totalCapacity = zones.Sum(z => z.Capacity);
+    var totalSlots = zones.Sum(z => z.SlotCount);
+    var occupiedSlots = zones.Sum(z => z.Slots.Count(s => s.IsOccupied));
+    var freeSlots = totalSlots - occupiedSlots;
     var defaultSite = (string)(ViewBag.DefaultSiteId ?? "");
 }
 
@@ -17,6 +17,8 @@
     .pl-wrap .page-header h2 { color: #0b3d2e; font-weight: 700; font-size: 26px; margin-bottom: 4px; }
     .pl-wrap .page-header p { color: #5f7168; font-size: 13px; }
 
+    .pl-note { background: #fff7ea; border: 1px solid #f3d3a8; color: #8a4b00; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; }
+
     .pl-stats { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: center; background: #fff; border: 1px solid #e3ebe7; border-radius: 14px; box-shadow: 0 1px 3px rgba(16,40,30,.05); margin-bottom: 14px; }
     .pl-stat { display: flex; align-items: center; gap: 14px; padding: 18px 22px; border-right: 1px solid #eef2f0; }
     .pl-stat-ic { width: 38px; height: 38px; border-radius: 10px; background: #e3f5ec; color: #1c9b61; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -24,7 +26,7 @@
     .pl-stat-lbl { font-size: 12px; color: #6b7d74; }
     .pl-stat-action { padding: 0 22px; }
 
-    .pl-btn { border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; background: none; }
+    .pl-btn { border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; background: none; white-space: nowrap; }
     .pl-btn-blue { background: #2f5fe0; color: #fff; padding: 10px 18px; }
     .pl-btn-blue:hover { background: #2449b8; }
     .pl-btn-green { background: #1c9b61; color: #fff; padding: 9px 18px; }
@@ -56,13 +58,26 @@
     .pl-pill { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
     .pl-pill-on { background: #d3f0e1; color: #11643d; }
     .pl-pill-off { background: #eceeed; color: #5b6560; }
-    .pl-actions { display: flex; gap: 8px; }
+    .pl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
     .pl-zone-body { display: none; padding: 16px 18px 18px 18px; border-top: 1px dashed #cfe3d8; }
     .pl-zone.open .pl-zone-body { display: block; }
-    .pl-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px 24px; }
+    .pl-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px 24px; margin-bottom: 16px; }
     .pl-d-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: #7a8c83; margin-bottom: 3px; }
     .pl-d-val { font-size: 13.5px; color: #16352b; word-break: break-word; }
+
+    .pl-slots-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pl-slots-head .pl-d-lbl { margin: 0 auto 0 0; }
+    .pl-legend { font-size: 11.5px; color: #6b7d74; display: inline-flex; align-items: center; gap: 6px; }
+    .pl-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pl-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #bfe6d1; background: #f1faf5; color: #11643d; border-radius: 8px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .pl-chip:hover { box-shadow: 0 1px 4px rgba(16,40,30,.15); }
+    .pl-chip[data-ro="1"] { cursor: default; }
+    .pl-chip[data-ro="1"]:hover { box-shadow: none; }
+    .pl-chip.occ { border-color: #f3d3a8; background: #fff7ea; color: #8a4b00; }
+    .pl-dot { width: 8px; height: 8px; border-radius: 50%; background: #1c9b61; display: inline-block; }
+    .pl-chip.occ .pl-dot { background: #e08a00; }
+    .pl-noslots { font-size: 13px; color: #7a8c83; }
 
     .pl-empty { text-align: center; color: #6b7d74; background: #fff; border: 1px dashed #cfe3d8; border-radius: 14px; padding: 36px 16px; font-size: 13.5px; }
 
@@ -78,21 +93,26 @@
 <div class="pl-wrap">
     <div class="page-header">
         <h2>Parking Layout</h2>
-        <p>Create and manage parking zones</p>
+        <p>Create zones and add parking slots to them</p>
     </div>
+
+    @if (!canWrite)
+    {
+        <div class="pl-note"><i class="fas fa-lock"></i> You are logged in as OPERATOR, which can only view this page. Log in as MANAGER or ADMIN to add zones and parking.</div>
+    }
 
     <div class="pl-stats">
         <div class="pl-stat">
-            <span class="pl-stat-ic"><i class="fas fa-layer-group"></i></span>
-            <div><div class="pl-stat-num">@totalZones</div><div class="pl-stat-lbl">Total Zones</div></div>
+            <span class="pl-stat-ic"><i class="fas fa-square-parking"></i></span>
+            <div><div class="pl-stat-num">@totalSlots</div><div class="pl-stat-lbl">Total Slots</div></div>
+        </div>
+        <div class="pl-stat">
+            <span class="pl-stat-ic"><i class="fas fa-car-side"></i></span>
+            <div><div class="pl-stat-num">@occupiedSlots</div><div class="pl-stat-lbl">Occupied</div></div>
         </div>
         <div class="pl-stat">
             <span class="pl-stat-ic"><i class="fas fa-circle-check"></i></span>
-            <div><div class="pl-stat-num">@activeZones</div><div class="pl-stat-lbl">Active Zones</div></div>
-        </div>
-        <div class="pl-stat">
-            <span class="pl-stat-ic"><i class="fas fa-square-parking"></i></span>
-            <div><div class="pl-stat-num">@totalCapacity</div><div class="pl-stat-lbl">Total Capacity</div></div>
+            <div><div class="pl-stat-num">@freeSlots</div><div class="pl-stat-lbl">Unoccupied</div></div>
         </div>
         <div class="pl-stat-action">
             @if (canWrite)
@@ -105,30 +125,34 @@
     <div class="pl-toolbar">
         <div class="pl-search">
             <i class="fas fa-search"></i>
-            <input type="text" id="plSearch" placeholder="Search zone name, zone ID or site" autocomplete="off" />
+            <input type="text" id="plSearch" placeholder="Search zone, zone ID, site or parking no" autocomplete="off" />
         </div>
         <select id="plStatus">
-            <option value="">All Statuses</option>
+            <option value="">All Zones</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
         </select>
+        @if (canWrite)
+        {
+            <button type="button" class="pl-btn pl-btn-green" id="plAddParkBtn"><i class="fas fa-plus"></i> Add Parking</button>
+        }
     </div>
 
     <div class="pl-sec-head">
-        <h3>Zones</h3>
+        <h3>Zones &amp; Parking</h3>
         <button type="button" class="pl-btn pl-btn-ghost" id="plExpandAll">Expand All</button>
         <button type="button" class="pl-btn pl-btn-ghost" id="plCollapseAll">Close All</button>
-        <span class="pl-count" id="plCount">@totalZones @(totalZones == 1 ? "Zone" : "Zones")</span>
+        <span class="pl-count" id="plCount">@zones.Count @(zones.Count == 1 ? "Zone" : "Zones")</span>
     </div>
 
     <div id="plList">
         @foreach (var z in zones)
         {
-            var searchText = (z.ZoneName + " " + z.ZoneId + " " + z.SiteId).ToLowerInvariant();
+            var zoneSearch = (z.ZoneName + " " + z.ZoneId + " " + z.SiteId).ToLowerInvariant();
             var statusKey = z.IsActive ? "active" : "inactive";
             var createdText = string.IsNullOrWhiteSpace(z.CreatedBy) && string.IsNullOrWhiteSpace(z.CreatedOn) ? "-" : (z.CreatedBy + " " + z.CreatedOn).Trim();
             var updatedText = string.IsNullOrWhiteSpace(z.UpdatedBy) && string.IsNullOrWhiteSpace(z.UpdatedOn) ? "-" : (z.UpdatedBy + " " + z.UpdatedOn).Trim();
-            <div class="pl-zone open" data-search="@searchText" data-status="@statusKey">
+            <div class="pl-zone open" data-zsearch="@zoneSearch" data-status="@statusKey">
                 <div class="pl-zone-head">
                     <span class="pl-chev"><i class="fas fa-caret-down"></i></span>
                     <span class="pl-zone-ic"><i class="fas fa-layer-group"></i></span>
@@ -144,6 +168,7 @@
                                     data-id="@z.Id" data-zoneid="@z.ZoneId" data-site="@z.SiteId"
                                     data-name="@z.ZoneName" data-capacity="@z.Capacity"
                                     data-status="@(z.IsActive ? "1" : "0")"><i class="fas fa-pen"></i> Edit</button>
+                            <button type="button" class="pl-btn pl-btn-ghost pl-addpark" data-zone="@z.ZoneId"><i class="fas fa-plus"></i> Add Parking</button>
                             <button type="button" class="pl-btn pl-btn-ghost pl-btn-danger pl-del"
                                     data-id="@z.Id" data-name="@z.ZoneName"><i class="fas fa-trash"></i> Delete</button>
                         </div>
@@ -154,9 +179,26 @@
                         <div><div class="pl-d-lbl">Zone ID</div><div class="pl-d-val">@z.ZoneId</div></div>
                         <div><div class="pl-d-lbl">Site ID</div><div class="pl-d-val">@z.SiteId</div></div>
                         <div><div class="pl-d-lbl">Capacity</div><div class="pl-d-val">@z.Capacity</div></div>
-                        <div><div class="pl-d-lbl">Parking Slots Created</div><div class="pl-d-val">@z.SlotCount</div></div>
                         <div><div class="pl-d-lbl">Created</div><div class="pl-d-val">@createdText</div></div>
                         <div><div class="pl-d-lbl">Last Updated</div><div class="pl-d-val">@updatedText</div></div>
+                    </div>
+                    <div class="pl-slots-head">
+                        <div class="pl-d-lbl">Parking Slots</div>
+                        <span class="pl-legend"><span class="pl-dot"></span> Unoccupied</span>
+                        <span class="pl-legend"><span class="pl-dot" style="background:#e08a00;"></span> Occupied</span>
+                    </div>
+                    <div class="pl-slots">
+                        @foreach (var s in z.Slots)
+                        {
+                            <button type="button" class="pl-chip @(s.IsOccupied ? "occ" : "free")"
+                                    data-no="@s.ParkingNo" data-key="@s.ParkingNo.ToLowerInvariant()" data-zone="@z.ZoneId"
+                                    data-occ="@(s.IsOccupied ? "1" : "0")" data-ro="@(canWrite ? "0" : "1")"
+                                    title="@(s.IsOccupied ? "Allocated to a card" : "Unoccupied")"><span class="pl-dot"></span>@s.ParkingNo</button>
+                        }
+                        @if (z.Slots.Count == 0)
+                        {
+                            <span class="pl-noslots">No parking slots in this zone yet.</span>
+                        }
                     </div>
                 </div>
             </div>
@@ -167,7 +209,7 @@
     {
         <div class="pl-empty">No zones yet. @(canWrite ? "Click Add Zone to create the first one." : "")</div>
     }
-    <div class="pl-empty" id="plNoMatch" style="display:none;">No zones match your search.</div>
+    <div class="pl-empty" id="plNoMatch" style="display:none;">No zones or parking match your search.</div>
 </div>
 
 @if (canWrite)
@@ -215,8 +257,49 @@
         </div>
     </div>
 
+    <div class="modal fade" id="plParkModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" id="plParkForm" action="@Url.Action("SaveParking", "ParkingLayout")">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="plParkTitle">Add Parking</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="original_no" id="plPOrig" value="" />
+                    <div class="mb-3">
+                        <label class="form-label" for="plPZone">Zone <span class="text-danger">*</span></label>
+                        <select class="form-select" name="zone_id" id="plPZone" required>
+                            <option value="">Select zone</option>
+                            @foreach (var zo in zones)
+                            {
+                                <option value="@zo.ZoneId">@(zo.ZoneName + (zo.IsActive ? "" : " (Inactive)"))</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="plPNo" id="plPNoLbl">Parking Number(s) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="parking_nos" id="plPNo" maxlength="2000" required autocomplete="off" />
+                        <div class="form-text" id="plPHelp">To add several, separate them with commas, for example B101, B102, B103</div>
+                    </div>
+                    <div class="alert alert-warning py-2 mb-0" id="plPOccNote" style="display:none;">This parking is allocated to a card. You can move it to another zone, but it cannot be renamed or deleted.</div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="pl-btn pl-btn-ghost pl-btn-danger" id="plPDelete" style="display:none;"><i class="fas fa-trash"></i> Delete</button>
+                    <div style="display:flex; gap:8px; margin-left:auto;">
+                        <button type="button" class="pl-btn pl-btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="pl-btn pl-btn-green" id="plPSaveBtn"><i class="fas fa-check"></i> Save Parking</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <form id="plDeleteForm" method="post" action="@Url.Action("DeleteZone", "ParkingLayout")" style="display:none;">
         <input type="hidden" name="id" id="plDelId" value="" />
+    </form>
+
+    <form id="plDeleteParkForm" method="post" action="@Url.Action("DeleteParking", "ParkingLayout")" style="display:none;">
+        <input type="hidden" name="parking_no" id="plDelParkNo" value="" />
     </form>
 }
 
@@ -237,7 +320,16 @@
                 var st = (statusSel && statusSel.value) || '';
                 var visible = 0;
                 cards().forEach(function (card) {
-                    var okText = !q || (card.getAttribute('data-search') || '').indexOf(q) !== -1;
+                    var zoneMatch = !q || (card.getAttribute('data-zsearch') || '').indexOf(q) !== -1;
+                    var chips = Array.prototype.slice.call(card.querySelectorAll('.pl-chip'));
+                    var chipMatches = 0;
+                    chips.forEach(function (chip) {
+                        var hit = !q || (chip.getAttribute('data-key') || '').indexOf(q) !== -1;
+                        if (hit) { chipMatches++; }
+                        // when only parking numbers match, show just the matching chips
+                        chip.style.display = (zoneMatch || hit) ? '' : 'none';
+                    });
+                    var okText = zoneMatch || chipMatches > 0;
                     var okStatus = !st || card.getAttribute('data-status') === st;
                     var show = okText && okStatus;
                     card.style.display = show ? '' : 'none';
@@ -265,11 +357,11 @@
                 });
             }
 
-            // Modal (only exists for roles that can write)
+            // ---------- Zone modal (only exists for roles that can write)
             var modalEl = document.getElementById('plZoneModal');
             var zoneModal = (modalEl && window.bootstrap) ? new bootstrap.Modal(modalEl) : null;
 
-            function openModal(btn, defaultSite) {
+            function openZoneModal(btn, defaultSite) {
                 if (!zoneModal) { return; }
                 var isEdit = !!btn;
                 document.getElementById('plModalTitle').textContent = isEdit ? 'Edit Zone' : 'Add Zone';
@@ -284,10 +376,10 @@
                 zoneModal.show();
             }
 
-            var addBtn = document.getElementById('plAddZoneBtn');
-            if (addBtn) {
-                addBtn.addEventListener('click', function () {
-                    openModal(null, addBtn.getAttribute('data-site'));
+            var addZoneBtn = document.getElementById('plAddZoneBtn');
+            if (addZoneBtn) {
+                addZoneBtn.addEventListener('click', function () {
+                    openZoneModal(null, addZoneBtn.getAttribute('data-site'));
                 });
             }
 
@@ -298,9 +390,64 @@
                 });
             }
 
+            // ---------- Parking modal
+            var parkEl = document.getElementById('plParkModal');
+            var parkModal = (parkEl && window.bootstrap) ? new bootstrap.Modal(parkEl) : null;
+
+            function openParkModal(zoneId, chip) {
+                if (!parkModal) { return; }
+                var isEdit = !!chip;
+                var occupied = isEdit && chip.getAttribute('data-occ') === '1';
+                var noInput = document.getElementById('plPNo');
+                document.getElementById('plParkTitle').textContent = isEdit ? 'Edit Parking' : 'Add Parking';
+                document.getElementById('plPOrig').value = isEdit ? chip.getAttribute('data-no') : '';
+                document.getElementById('plPZone').value = zoneId || '';
+                noInput.value = isEdit ? chip.getAttribute('data-no') : '';
+                noInput.readOnly = occupied;
+                document.getElementById('plPNoLbl').firstChild.textContent = isEdit ? 'Parking Number ' : 'Parking Number(s) ';
+                document.getElementById('plPHelp').style.display = isEdit ? 'none' : '';
+                document.getElementById('plPOccNote').style.display = occupied ? '' : 'none';
+                document.getElementById('plPDelete').style.display = (isEdit && !occupied) ? '' : 'none';
+                document.getElementById('plPSaveBtn').disabled = false;
+                parkModal.show();
+            }
+
+            var addParkBtn = document.getElementById('plAddParkBtn');
+            if (addParkBtn) {
+                addParkBtn.addEventListener('click', function () { openParkModal('', null); });
+            }
+
+            var parkForm = document.getElementById('plParkForm');
+            if (parkForm) {
+                parkForm.addEventListener('submit', function () {
+                    document.getElementById('plPSaveBtn').disabled = true;
+                });
+            }
+
+            var parkDelete = document.getElementById('plPDelete');
+            if (parkDelete) {
+                parkDelete.addEventListener('click', function () {
+                    var no = document.getElementById('plPOrig').value;
+                    if (window.confirm('Delete parking "' + no + '"?')) {
+                        document.getElementById('plDelParkNo').value = no;
+                        document.getElementById('plDeleteParkForm').submit();
+                    }
+                });
+            }
+
+            // ---------- Clicks
             document.addEventListener('click', function (e) {
                 var editBtn = e.target.closest('.pl-edit');
-                if (editBtn) { openModal(editBtn, ''); return; }
+                if (editBtn) { openZoneModal(editBtn, ''); return; }
+
+                var addParkInZone = e.target.closest('.pl-addpark');
+                if (addParkInZone) { openParkModal(addParkInZone.getAttribute('data-zone'), null); return; }
+
+                var chip = e.target.closest('.pl-chip');
+                if (chip) {
+                    if (chip.getAttribute('data-ro') !== '1') { openParkModal(chip.getAttribute('data-zone'), chip); }
+                    return;
+                }
 
                 var delBtn = e.target.closest('.pl-del');
                 if (delBtn) {
