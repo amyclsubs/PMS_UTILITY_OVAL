@@ -14,6 +14,22 @@ namespace AmaanParkingSystem.Controllers
         {
         }
 
+        // Total cards per company (from db_tbl_11_cards_allocated)
+        private Dictionary<string, int> GetCardCountsByCompany(SqlConnection conn)
+        {
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in conn.Query(@"
+                SELECT LTRIM(RTRIM(CAST(car_parkers_company_id AS NVARCHAR(100)))) AS company_id,
+                       COUNT(*) AS total
+                FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                WHERE car_parkers_company_id IS NOT NULL
+                GROUP BY LTRIM(RTRIM(CAST(car_parkers_company_id AS NVARCHAR(100))))"))
+            {
+                map[(string)r.company_id] = (int)r.total;
+            }
+            return map;
+        }
+
         // Generate next Company ID (CPC_0001, CPC_0002, etc.)
         private string GenerateNextCompanyId()
         {
@@ -75,6 +91,8 @@ namespace AmaanParkingSystem.Controllers
             ViewBag.SortColumn = sortColumn;
             ViewBag.SortOrder = sortOrder;
 
+            ViewBag.CardCounts = GetCardCountsByCompany(conn);
+
             // Generate next Company ID for new entry
             var newModel = new ParkerCompanyMasterModel
             {
@@ -123,6 +141,7 @@ namespace AmaanParkingSystem.Controllers
             ViewBag.SortColumn = sortColumn;
             ViewBag.SortOrder = sortOrder;
             ViewBag.IsEdit = true;
+            ViewBag.CardCounts = GetCardCountsByCompany(conn);
 
             return View("~/Views/UserManagement/ParkerCompanyMaster.cshtml", company);
         }

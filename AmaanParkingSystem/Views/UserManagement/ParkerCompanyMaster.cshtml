@@ -3,6 +3,7 @@
     ViewData["Title"] = "Parker Company Master";
     var companyList = ViewBag.CompanyList as List<AmaanParkingSystem.Models.UserManagement.ParkerCompanyMasterModel> ?? new List<AmaanParkingSystem.Models.UserManagement.ParkerCompanyMasterModel>();
     var isEdit = ViewBag.IsEdit ?? false;
+    var cardCounts = ViewBag.CardCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
 
     // Find duplicate Email and Contact Numbers
     var duplicateEmails = companyList
@@ -146,6 +147,7 @@
                             <th>Contact Number</th>
                             <th>Address</th>
                             <th>Status</th>
+                            <th>Total Cards</th>
                             <th>Created By</th>
                             <th>Created On</th>
                             <th>Updated By</th>
@@ -196,6 +198,16 @@
                                             INACTIVE
                                         </span>
                                     }
+                                </td>
+                                <td style="text-align: center;">
+                                    @{
+                                        int cTotalCards = 0;
+                                        if (!string.IsNullOrEmpty(c.car_parkers_company_id))
+                                        {
+                                            cardCounts.TryGetValue(c.car_parkers_company_id.Trim(), out cTotalCards);
+                                        }
+                                    }
+                                    <span class="badge bg-info text-dark" style="font-size: 11px;">@cTotalCards</span>
                                 </td>
                                 <td>@c.created_by</td>
                                 <td>@(c.created_on?.ToString("dd-MMM-yyyy HH:mm"))</td>
