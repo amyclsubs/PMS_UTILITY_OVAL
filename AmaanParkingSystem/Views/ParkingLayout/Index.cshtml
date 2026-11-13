@@ -1,0 +1,322 @@
+﻿@model List<AmaanParkingSystem.Controllers.ParkingLayoutZoneVm>
+@using Microsoft.AspNetCore.Http
+@{
+    ViewData["Title"] = "Parking Layout";
+    var zones = Model ?? new List<AmaanParkingSystem.Controllers.ParkingLayoutZoneVm>();
+    var operatorType = Context.Session.GetString("OperatorType") ?? string.Empty;
+    var canWrite = !string.Equals(operatorType, "OPERATOR", StringComparison.OrdinalIgnoreCase);
+    var totalZones = zones.Count;
+    var activeZones = zones.Count(z => z.IsActive);
+    var totalCapacity = zones.Sum(z => z.Capacity);
+    var defaultSite = (string)(ViewBag.DefaultSiteId ?? "");
+}
+
+<style>
+    .pl-wrap { color: #16352b; }
+    .pl-wrap .page-header { margin-bottom: 18px; }
+    .pl-wrap .page-header h2 { color: #0b3d2e; font-weight: 700; font-size: 26px; margin-bottom: 4px; }
+    .pl-wrap .page-header p { color: #5f7168; font-size: 13px; }
+
+    .pl-stats { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: center; background: #fff; border: 1px solid #e3ebe7; border-radius: 14px; box-shadow: 0 1px 3px rgba(16,40,30,.05); margin-bottom: 14px; }
+    .pl-stat { display: flex; align-items: center; gap: 14px; padding: 18px 22px; border-right: 1px solid #eef2f0; }
+    .pl-stat-ic { width: 38px; height: 38px; border-radius: 10px; background: #e3f5ec; color: #1c9b61; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .pl-stat-num { font-size: 20px; font-weight: 700; color: #0b3d2e; line-height: 1.1; }
+    .pl-stat-lbl { font-size: 12px; color: #6b7d74; }
+    .pl-stat-action { padding: 0 22px; }
+
+    .pl-btn { border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; background: none; }
+    .pl-btn-blue { background: #2f5fe0; color: #fff; padding: 10px 18px; }
+    .pl-btn-blue:hover { background: #2449b8; }
+    .pl-btn-green { background: #1c9b61; color: #fff; padding: 9px 18px; }
+    .pl-btn-green:hover { background: #167d4e; }
+    .pl-btn-ghost { background: #fff; border-color: #dce5e0; color: #26433a; }
+    .pl-btn-ghost:hover { background: #f3f8f5; }
+    .pl-btn-danger:hover { background: #fdecec; border-color: #f3c3c3; color: #b42318; }
+
+    .pl-toolbar { display: flex; gap: 12px; align-items: center; background: #fff; border: 1px solid #e3ebe7; border-radius: 14px; padding: 10px; margin-bottom: 18px; }
+    .pl-search { flex: 1; min-width: 0; position: relative; }
+    .pl-search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #8a9a92; font-size: 13px; }
+    .pl-search input { width: 100%; border: 1px solid #e3ebe7; border-radius: 8px; padding: 9px 12px 9px 38px; font-size: 13.5px; background: #fff; color: #16352b; }
+    .pl-search input:focus, .pl-toolbar select:focus { outline: 2px solid #b9e3cf; border-color: #1c9b61; }
+    .pl-toolbar select { border: 1px solid #e3ebe7; border-radius: 8px; padding: 9px 12px; font-size: 13.5px; background: #fff; color: #16352b; min-width: 140px; }
+
+    .pl-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .pl-sec-head h3 { font-size: 15px; font-weight: 700; color: #0b3d2e; margin: 0 auto 0 0; }
+    .pl-count { font-size: 12.5px; color: #6b7d74; }
+
+    .pl-zone { background: #fff; border: 1px solid #dcebe3; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+    .pl-zone-head { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #eaf6ef; cursor: pointer; }
+    .pl-chev { color: #5f7168; width: 14px; text-align: center; }
+    .pl-chev i { transition: transform .2s ease; font-size: 12px; }
+    .pl-zone:not(.open) .pl-chev i { transform: rotate(-90deg); }
+    .pl-zone-ic { width: 36px; height: 36px; border-radius: 10px; background: #1c9b61; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .pl-zone-title { flex: 1; min-width: 0; }
+    .pl-zone-name { font-weight: 700; color: #0b3d2e; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pl-zone-sub { font-size: 12px; color: #5f7168; margin-top: 2px; }
+    .pl-pill { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+    .pl-pill-on { background: #d3f0e1; color: #11643d; }
+    .pl-pill-off { background: #eceeed; color: #5b6560; }
+    .pl-actions { display: flex; gap: 8px; }
+
+    .pl-zone-body { display: none; padding: 16px 18px 18px 18px; border-top: 1px dashed #cfe3d8; }
+    .pl-zone.open .pl-zone-body { display: block; }
+    .pl-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px 24px; }
+    .pl-d-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: #7a8c83; margin-bottom: 3px; }
+    .pl-d-val { font-size: 13.5px; color: #16352b; word-break: break-word; }
+
+    .pl-empty { text-align: center; color: #6b7d74; background: #fff; border: 1px dashed #cfe3d8; border-radius: 14px; padding: 36px 16px; font-size: 13.5px; }
+
+    @@media (max-width: 900px) {
+        .pl-stats { grid-template-columns: 1fr; }
+        .pl-stat { border-right: 0; border-bottom: 1px solid #eef2f0; }
+        .pl-stat-action { padding: 14px 22px; }
+        .pl-zone-head { flex-wrap: wrap; }
+        .pl-toolbar { flex-wrap: wrap; }
+    }
+</style>
+
+<div class="pl-wrap">
+    <div class="page-header">
+        <h2>Parking Layout</h2>
+        <p>Create and manage parking zones</p>
+    </div>
+
+    <div class="pl-stats">
+        <div class="pl-stat">
+            <span class="pl-stat-ic"><i class="fas fa-layer-group"></i></span>
+            <div><div class="pl-stat-num">@totalZones</div><div class="pl-stat-lbl">Total Zones</div></div>
+        </div>
+        <div class="pl-stat">
+            <span class="pl-stat-ic"><i class="fas fa-circle-check"></i></span>
+            <div><div class="pl-stat-num">@activeZones</div><div class="pl-stat-lbl">Active Zones</div></div>
+        </div>
+        <div class="pl-stat">
+            <span class="pl-stat-ic"><i class="fas fa-square-parking"></i></span>
+            <div><div class="pl-stat-num">@totalCapacity</div><div class="pl-stat-lbl">Total Capacity</div></div>
+        </div>
+        <div class="pl-stat-action">
+            @if (canWrite)
+            {
+                <button type="button" class="pl-btn pl-btn-blue" id="plAddZoneBtn" data-site="@defaultSite"><i class="fas fa-plus"></i> Add Zone</button>
+            }
+        </div>
+    </div>
+
+    <div class="pl-toolbar">
+        <div class="pl-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="plSearch" placeholder="Search zone name, zone ID or site" autocomplete="off" />
+        </div>
+        <select id="plStatus">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+    </div>
+
+    <div class="pl-sec-head">
+        <h3>Zones</h3>
+        <button type="button" class="pl-btn pl-btn-ghost" id="plExpandAll">Expand All</button>
+        <button type="button" class="pl-btn pl-btn-ghost" id="plCollapseAll">Close All</button>
+        <span class="pl-count" id="plCount">@totalZones @(totalZones == 1 ? "Zone" : "Zones")</span>
+    </div>
+
+    <div id="plList">
+        @foreach (var z in zones)
+        {
+            var searchText = (z.ZoneName + " " + z.ZoneId + " " + z.SiteId).ToLowerInvariant();
+            var statusKey = z.IsActive ? "active" : "inactive";
+            var createdText = string.IsNullOrWhiteSpace(z.CreatedBy) && string.IsNullOrWhiteSpace(z.CreatedOn) ? "-" : (z.CreatedBy + " " + z.CreatedOn).Trim();
+            var updatedText = string.IsNullOrWhiteSpace(z.UpdatedBy) && string.IsNullOrWhiteSpace(z.UpdatedOn) ? "-" : (z.UpdatedBy + " " + z.UpdatedOn).Trim();
+            <div class="pl-zone open" data-search="@searchText" data-status="@statusKey">
+                <div class="pl-zone-head">
+                    <span class="pl-chev"><i class="fas fa-caret-down"></i></span>
+                    <span class="pl-zone-ic"><i class="fas fa-layer-group"></i></span>
+                    <div class="pl-zone-title">
+                        <div class="pl-zone-name">@z.ZoneName</div>
+                        <div class="pl-zone-sub">Parking Zone &middot; @z.SlotCount @(z.SlotCount == 1 ? "Slot" : "Slots") &middot; Capacity @z.Capacity</div>
+                    </div>
+                    <span class="pl-pill @(z.IsActive ? "pl-pill-on" : "pl-pill-off")">@(z.IsActive ? "Active" : "Inactive")</span>
+                    @if (canWrite)
+                    {
+                        <div class="pl-actions">
+                            <button type="button" class="pl-btn pl-btn-ghost pl-edit"
+                                    data-id="@z.Id" data-zoneid="@z.ZoneId" data-site="@z.SiteId"
+                                    data-name="@z.ZoneName" data-capacity="@z.Capacity"
+                                    data-status="@(z.IsActive ? "1" : "0")"><i class="fas fa-pen"></i> Edit</button>
+                            <button type="button" class="pl-btn pl-btn-ghost pl-btn-danger pl-del"
+                                    data-id="@z.Id" data-name="@z.ZoneName"><i class="fas fa-trash"></i> Delete</button>
+                        </div>
+                    }
+                </div>
+                <div class="pl-zone-body">
+                    <div class="pl-details">
+                        <div><div class="pl-d-lbl">Zone ID</div><div class="pl-d-val">@z.ZoneId</div></div>
+                        <div><div class="pl-d-lbl">Site ID</div><div class="pl-d-val">@z.SiteId</div></div>
+                        <div><div class="pl-d-lbl">Capacity</div><div class="pl-d-val">@z.Capacity</div></div>
+                        <div><div class="pl-d-lbl">Parking Slots Created</div><div class="pl-d-val">@z.SlotCount</div></div>
+                        <div><div class="pl-d-lbl">Created</div><div class="pl-d-val">@createdText</div></div>
+                        <div><div class="pl-d-lbl">Last Updated</div><div class="pl-d-val">@updatedText</div></div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (zones.Count == 0)
+    {
+        <div class="pl-empty">No zones yet. @(canWrite ? "Click Add Zone to create the first one." : "")</div>
+    }
+    <div class="pl-empty" id="plNoMatch" style="display:none;">No zones match your search.</div>
+</div>
+
+@if (canWrite)
+{
+    <div class="modal fade" id="plZoneModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" id="plZoneForm" action="@Url.Action("SaveZone", "ParkingLayout")">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="plModalTitle">Add Zone</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="plFId" value="" />
+                    <div class="mb-3" id="plZoneIdRow" style="display:none;">
+                        <label class="form-label" for="plFZoneId">Zone ID</label>
+                        <input type="text" class="form-control" id="plFZoneId" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="plFSite">Site ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="site_id" id="plFSite" maxlength="50" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="plFName">Zone Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="zone_name" id="plFName" maxlength="100" required />
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="plFCap">Capacity</label>
+                            <input type="number" class="form-control" name="capacity" id="plFCap" min="0" step="1" value="0" />
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label" for="plFStatus">Status</label>
+                            <select class="form-select" name="status" id="plFStatus">
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="pl-btn pl-btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="pl-btn pl-btn-green" id="plSaveBtn"><i class="fas fa-check"></i> Save Zone</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <form id="plDeleteForm" method="post" action="@Url.Action("DeleteZone", "ParkingLayout")" style="display:none;">
+        <input type="hidden" name="id" id="plDelId" value="" />
+    </form>
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            var search = document.getElementById('plSearch');
+            var statusSel = document.getElementById('plStatus');
+            var countLbl = document.getElementById('plCount');
+            var noMatch = document.getElementById('plNoMatch');
+
+            function cards() {
+                return Array.prototype.slice.call(document.querySelectorAll('.pl-zone'));
+            }
+
+            function applyFilter() {
+                var q = ((search && search.value) || '').toLowerCase().trim();
+                var st = (statusSel && statusSel.value) || '';
+                var visible = 0;
+                cards().forEach(function (card) {
+                    var okText = !q || (card.getAttribute('data-search') || '').indexOf(q) !== -1;
+                    var okStatus = !st || card.getAttribute('data-status') === st;
+                    var show = okText && okStatus;
+                    card.style.display = show ? '' : 'none';
+                    if (show) { visible++; }
+                });
+                if (countLbl) { countLbl.textContent = visible + (visible === 1 ? ' Zone' : ' Zones'); }
+                if (noMatch) { noMatch.style.display = (visible === 0 && cards().length > 0) ? '' : 'none'; }
+            }
+
+            if (search) { search.addEventListener('input', applyFilter); }
+            if (statusSel) { statusSel.addEventListener('change', applyFilter); }
+            window.addEventListener('load', applyFilter);
+            applyFilter();
+
+            var expandAll = document.getElementById('plExpandAll');
+            var collapseAll = document.getElementById('plCollapseAll');
+            if (expandAll) {
+                expandAll.addEventListener('click', function () {
+                    cards().forEach(function (c) { c.classList.add('open'); });
+                });
+            }
+            if (collapseAll) {
+                collapseAll.addEventListener('click', function () {
+                    cards().forEach(function (c) { c.classList.remove('open'); });
+                });
+            }
+
+            // Modal (only exists for roles that can write)
+            var modalEl = document.getElementById('plZoneModal');
+            var zoneModal = (modalEl && window.bootstrap) ? new bootstrap.Modal(modalEl) : null;
+
+            function openModal(btn, defaultSite) {
+                if (!zoneModal) { return; }
+                var isEdit = !!btn;
+                document.getElementById('plModalTitle').textContent = isEdit ? 'Edit Zone' : 'Add Zone';
+                document.getElementById('plFId').value = isEdit ? btn.getAttribute('data-id') : '';
+                document.getElementById('plZoneIdRow').style.display = isEdit ? '' : 'none';
+                document.getElementById('plFZoneId').value = isEdit ? btn.getAttribute('data-zoneid') : '';
+                document.getElementById('plFSite').value = isEdit ? btn.getAttribute('data-site') : (defaultSite || '');
+                document.getElementById('plFName').value = isEdit ? btn.getAttribute('data-name') : '';
+                document.getElementById('plFCap').value = isEdit ? btn.getAttribute('data-capacity') : '0';
+                document.getElementById('plFStatus').value = isEdit ? btn.getAttribute('data-status') : '1';
+                document.getElementById('plSaveBtn').disabled = false;
+                zoneModal.show();
+            }
+
+            var addBtn = document.getElementById('plAddZoneBtn');
+            if (addBtn) {
+                addBtn.addEventListener('click', function () {
+                    openModal(null, addBtn.getAttribute('data-site'));
+                });
+            }
+
+            var zoneForm = document.getElementById('plZoneForm');
+            if (zoneForm) {
+                zoneForm.addEventListener('submit', function () {
+                    document.getElementById('plSaveBtn').disabled = true;
+                });
+            }
+
+            document.addEventListener('click', function (e) {
+                var editBtn = e.target.closest('.pl-edit');
+                if (editBtn) { openModal(editBtn, ''); return; }
+
+                var delBtn = e.target.closest('.pl-del');
+                if (delBtn) {
+                    var nm = delBtn.getAttribute('data-name') || 'this zone';
+                    if (window.confirm('Delete zone "' + nm + '"?')) {
+                        document.getElementById('plDelId').value = delBtn.getAttribute('data-id');
+                        document.getElementById('plDeleteForm').submit();
+                    }
+                    return;
+                }
+
+                var head = e.target.closest('.pl-zone-head');
+                if (head && !e.target.closest('.pl-actions')) {
+                    head.parentElement.classList.toggle('open');
+                }
+            });
+        })();
+    </script>
+}
