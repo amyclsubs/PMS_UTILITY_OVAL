@@ -842,6 +842,14 @@
                                 <i class="fas fa-bell"></i> B2 Notification
                             </a>
                         </li>
+                        <li class="sidebar-submenu-item">
+                            <a href="/ChargeControl"
+                               class="sidebar-submenu-link"
+                               data-tab-title="Charge Control"
+                               data-tab-icon="fas fa-toggle-on">
+                                <i class="fas fa-toggle-on"></i> Charge Control
+                            </a>
+                        </li>
                     </ul>
                 </li>
             }
@@ -1176,6 +1184,7 @@
 
            if (path.startsWith("/RealTimeReport")) return "/RealTimeReport";
            if (path.startsWith("/B2Notification")) return "/B2Notification";
+           if (path.startsWith("/ChargeControl")) return "/ChargeControl";
 
             // Add similar rules here if you see other modules with edit pages.
             return path; // default: use full pathname
