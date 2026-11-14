@@ -144,7 +144,11 @@ namespace AmaanParkingSystem.Services
         {
             // stops the timer and a manual run from overlapping and sending twice
             if (!await _runLock.WaitAsync(0)) return;
-            try { await DoWorkCoreAsync(state); }
+            try
+            {
+                await DoWorkCoreAsync(state);
+                if (IsEnabled) await DoPenaltyWorkAsync();
+            }
             finally { _runLock.Release(); }
         }
 
@@ -280,11 +284,13 @@ namespace AmaanParkingSystem.Services
                     ORDER BY NotificationTime DESC;";
 
                 var alreadySent = await conn.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(1) FROM dbo.db_tbl_28_B2Notificationlog WHERE EntryId = @EntryId AND Status = 'Email Sent'",
+                    "SELECT COUNT(1) FROM dbo.db_tbl_28_B2Notificationlog WHERE EntryId = @EntryId AND Status = 'Email Sent' AND ISNULL(Remarks,'') NOT LIKE 'PENALTY%'",
                     new { EntryId = entryId });
                 if (alreadySent > 0) return true; // one email per entry, never repeat
 
-                var last = await conn.QueryFirstOrDefaultAsync<DateTime?>(sql, new { EntryId = entryId });
+                var last = await conn.QueryFirstOrDefaultAsync<DateTime?>(
+                    "SELECT TOP 1 NotificationTime FROM dbo.db_tbl_28_B2Notificationlog WHERE EntryId = @EntryId AND ISNULL(Remarks,'') NOT LIKE 'PENALTY%' ORDER BY NotificationTime DESC",
+                    new { EntryId = entryId });
                 if (last == null) return false;
 
                 return (DateTime.Now - last.Value).TotalMinutes < CooldownMinutes;
@@ -386,7 +392,8 @@ namespace AmaanParkingSystem.Services
                     FROM dbo.db_tbl_28_B2Notificationlog
                     ORDER BY NotificationTime DESC;";
 
-                var rows = await conn.QueryAsync(sql);
+                var rows = await conn.QueryAsync(
+                    sql.Replace("FROM dbo.db_tbl_28_B2Notificationlog", ", Remarks FROM dbo.db_tbl_28_B2Notificationlog"));
                 return rows.ToList();
             }
             catch (Exception ex)
@@ -430,7 +437,10 @@ namespace AmaanParkingSystem.Services
                     FROM dbo.[db_tbl_14_car_enterd]
                     WHERE [action_status] = 'Entered'
                       AND [card_type] IN ('DAILY_ACCESS', 'SEASONAL')
-                      AND [B2_entry_time] IS NULL
+                      AND ([B2_entry_time] IS NULL OR ([B2_exit_time] IS NOT NULL AND [B2_exit_time] >= [B2_entry_time]))
+                      AND ([B2EntryTime]   IS NULL OR ([B2ExitTime]   IS NOT NULL AND [B2ExitTime]   >= [B2EntryTime]))
+                      AND ([TB1EntryTime]  IS NULL OR ([TB1ExitTime]  IS NOT NULL AND [TB1ExitTime]  >= [TB1EntryTime]))
+                      AND ([B3EntryTime]   IS NULL OR ([B3ExitTime]   IS NOT NULL AND [B3ExitTime]   >= [B3EntryTime]))
                       AND [entry_time] IS NOT NULL
                       AND DATEDIFF(MINUTE, [entry_time], GETDATE()) >= @ThresholdMinutes
                     ORDER BY [entry_time] ASC;";
@@ -624,6 +634,172 @@ namespace AmaanParkingSystem.Services
 </html>";
         }
 
+        // ═════════════════════════════════════════════════════════════════════
+        // PENALTY NOTIFICATION (sub-company exceeds Total_Cars_allowed)
+        // ═════════════════════════════════════════════════════════════════════
+        private async Task DoPenaltyWorkAsync()
+        {
+            try
+            {
+                var list = await GetPenaltyEntriesAsync();
+                if (!list.Any()) return;
+
+                var smtp = await GetSmtpSettingsAsync();
+                int sent = 0, failed = 0;
+
+                foreach (var car in list)
+                {
+                    if (await HasPenaltyNotificationAsync(car.id)) continue;
+
+                    var subCo = await GetSubCompanyAsync(car.car_parkers_sub_co_id ?? "UNKNOWN");
+                    if (subCo == null || string.IsNullOrWhiteSpace(subCo.Email))
+                    {
+                        await InsertNotificationLogAsync(car, subCo, false, "PENALTY: Skipped: no email configured");
+                        continue;
+                    }
+
+                    string subject = $"⚠️ Penalty Notice: Car Limit Exceeded – {car.car_plate_no ?? car.cardno}";
+                    string body = BuildPenaltyEmailBody(subCo, car);
+
+                    bool ok = await SendEmailAsync(smtp, subCo.Email, subject, body);
+                    if (ok)
+                    {
+                        sent++;
+                        TotalEmailsSent++;
+                        await InsertNotificationLogAsync(car, subCo, true, "PENALTY: Email sent successfully");
+                    }
+                    else
+                    {
+                        failed++;
+                        TotalEmailsFailed++;
+                        await InsertNotificationLogAsync(car, subCo, false, "PENALTY: SMTP send failed");
+                    }
+                }
+
+                if (sent + failed > 0)
+                {
+                    _logger.LogInformation("[B2 Notify] Penalty Summary: Sent={Sent}, Failed={Failed}", sent, failed);
+                    LastRunStatus += $" | Penalty: Sent {sent}, Failed {failed}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[B2 Notify] ❌ Error in DoPenaltyWorkAsync: {Message}", ex.Message);
+            }
+        }
+
+        private async Task<bool> HasPenaltyNotificationAsync(int entryId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(GetConnectionString());
+
+                var sentCount = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(1) FROM dbo.db_tbl_28_B2Notificationlog WHERE EntryId = @EntryId AND Status = 'Email Sent' AND ISNULL(Remarks,'') LIKE 'PENALTY%'",
+                    new { EntryId = entryId });
+                if (sentCount > 0) return true; // one penalty email per entry
+
+                var last = await conn.QueryFirstOrDefaultAsync<DateTime?>(
+                    "SELECT TOP 1 NotificationTime FROM dbo.db_tbl_28_B2Notificationlog WHERE EntryId = @EntryId AND ISNULL(Remarks,'') LIKE 'PENALTY%' ORDER BY NotificationTime DESC",
+                    new { EntryId = entryId });
+                if (last == null) return false;
+
+                return (DateTime.Now - last.Value).TotalMinutes < CooldownMinutes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[B2 Notify] ❌ Error checking penalty notification for entry {EntryId}: {Message}", entryId, ex.Message);
+                return true; // fail-safe: do not spam
+            }
+        }
+
+        /// <summary>Cars currently 'Entered' beyond the sub-company's Total_Cars_allowed (oldest cars are within limit).</summary>
+        public async Task<List<B2PenaltyEntry>> GetPenaltyEntriesAsync()
+        {
+            try
+            {
+                using var conn = new SqlConnection(GetConnectionString());
+
+                const string sql = @"
+                    SELECT x.* FROM (
+                        SELECT
+                            e.[id], e.[cardno], e.[card_name], e.[card_type], e.[car_plate_no], e.[entry_time],
+                            e.[action_status], e.[car_parkers_company_id], e.[car_parkers_sub_co_id],
+                            e.[car_parkers_sub_co_name], e.[fee_schedule_name],
+                            TRY_CAST(c.[Total_Cars_allowed] AS INT) AS TotalCarsAllowed,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY CAST(e.[car_parkers_sub_co_id] AS NVARCHAR(50))
+                                ORDER BY e.[entry_time] ASC, e.[id] ASC) AS CarRank
+                        FROM dbo.[db_tbl_14_car_enterd] e
+                        INNER JOIN [AMAAN_PMS].[dbo].[db_tbl_08_parkers_company] c
+                            ON CAST(c.[car_parkers_sub_co_id] AS NVARCHAR(50)) = CAST(e.[car_parkers_sub_co_id] AS NVARCHAR(50))
+                           AND c.[car_parkers_status] = 1
+                        WHERE e.[action_status] = 'Entered'
+                          AND e.[entry_time] IS NOT NULL
+                          AND TRY_CAST(c.[Total_Cars_allowed] AS INT) > 0
+                    ) x
+                    WHERE x.CarRank > x.TotalCarsAllowed
+                    ORDER BY x.[entry_time] ASC;";
+
+                return (await conn.QueryAsync<B2PenaltyEntry>(sql)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[B2 Notify] ❌ Error fetching penalty entries: {Message}", ex.Message);
+                return new List<B2PenaltyEntry>();
+            }
+        }
+
+        private string BuildPenaltyEmailBody(SubCoInfo subCo, B2PenaltyEntry car)
+        {
+            string entryTimeStr = car.entry_time.HasValue
+                ? car.entry_time.Value.ToString("dd-MMM-yyyy HH:mm:ss") : "—";
+
+            return $@"<!DOCTYPE html>
+<html>
+<head><meta charset='utf-8'></head>
+<body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;'>
+  <div style='max-width:680px;margin:30px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1);'>
+    <div style='background:#1a3c5e;color:#fff;padding:28px 32px;text-align:center;'>
+      <h1 style='margin:0;font-size:22px;'>🅿️ Amaan Parking Management System</h1>
+      <p style='margin:6px 0 0;font-size:13px;color:#a8c6e0;'>Car Limit Exceeded — Penalty Notice</p>
+    </div>
+    <div style='padding:28px 32px;'>
+      <p>Dear <strong>{subCo.ContactPerson ?? subCo.SubCoName ?? "Valued Client"}</strong>,</p>
+      <div style='background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:14px 18px;margin-bottom:20px;'>
+        <strong>⚠️ Notice:</strong> The vehicle below is exceeding the total car limit
+        (<strong>{car.TotalCarsAllowed}</strong>) allowed for your sub-company
+        (<strong>{subCo.SubCoName}</strong>).<br><br>
+        <strong style='color:red;'>A penalty will be charged on this vehicle.</strong>
+      </div>
+      <table style='width:100%;border-collapse:collapse;'>
+        <thead>
+          <tr>
+            <th style='background:#1a3c5e;color:#fff;padding:10px 12px;text-align:left;font-size:13px;'>Card No</th>
+            <th style='background:#1a3c5e;color:#fff;padding:10px 12px;text-align:left;font-size:13px;'>Card Name</th>
+            <th style='background:#1a3c5e;color:#fff;padding:10px 12px;text-align:left;font-size:13px;'>Plate No</th>
+            <th style='background:#1a3c5e;color:#fff;padding:10px 12px;text-align:left;font-size:13px;'>Entry Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style='padding:8px 12px;border-bottom:1px solid #eee;'>{car.cardno ?? "—"}</td>
+            <td style='padding:8px 12px;border-bottom:1px solid #eee;'>{car.card_name ?? "—"}</td>
+            <td style='padding:8px 12px;border-bottom:1px solid #eee;'>{car.car_plate_no ?? "—"}</td>
+            <td style='padding:8px 12px;border-bottom:1px solid #eee;'>{entryTimeStr}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style='margin-top:20px;'>Best regards,<br><strong>Amaan Parking Management System</strong></p>
+    </div>
+    <div style='background:#f0f0f0;text-align:center;font-size:11px;color:#999;padding:16px;'>
+      Automated notification sent at {DateTime.Now:dd-MMM-yyyy HH:mm:ss}.<br>
+      © {DateTime.Now.Year} Amaan Parking Management System. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>";
+        }
         public override void Dispose()
         {
             _timer?.Dispose();
@@ -665,6 +841,12 @@ namespace AmaanParkingSystem.Services
         public string car_parkers_sub_co_name { get; set; }
         public string car_parkers_company_id { get; set; }
         public string fee_schedule_name { get; set; }
+    }
+
+    public class B2PenaltyEntry : B2PendingEntry
+    {
+        public int TotalCarsAllowed { get; set; }
+        public int CarRank { get; set; }
     }
 
     public class SubCoInfo

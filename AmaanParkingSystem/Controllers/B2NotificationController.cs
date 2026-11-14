@@ -48,7 +48,9 @@ namespace AmaanParkingSystem.Controllers
                         DateTime? nt = row.NotificationTime as DateTime?;
                         DateTime? et = row.EntryTime as DateTime?;
                         string status = (string)(row.Status ?? "Email Sent");
-
+                        string remarks = (string)(row.Remarks ?? "");
+                        if (remarks.StartsWith("PENALTY", StringComparison.OrdinalIgnoreCase))
+                            status = status == "Email Sent" ? "Penalty Sent" : "Penalty Failed";
                         return new
                         {
                             // keep same property name used in JS: subCoId = "cardno|entryId"
