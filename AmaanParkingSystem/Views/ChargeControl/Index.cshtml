@@ -1,0 +1,146 @@
+﻿@{
+    ViewData["Title"] = "Charge Control";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    .status-badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+    .badge-enabled { background:#d4edda; color:#155724; }
+    .badge-disabled { background:#f8d7da; color:#721c24; }
+    .settings-card { border:1px solid #dee2e6; border-radius:10px; padding:24px; background:#fff; height:100%; }
+
+    .toggle-switch { position:relative; display:inline-block; width:56px; height:28px; }
+    .toggle-switch input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.3s; border-radius:28px; }
+    .slider:before { position:absolute; content:""; height:22px; width:22px; left:3px; bottom:3px; background-color:white; transition:.3s; border-radius:50%; }
+    input:checked + .slider { background-color:#28a745; }
+    input:checked + .slider:before { transform:translateX(28px); }
+</style>
+
+<div class="container-fluid px-4 py-3">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1 fw-bold">💰 Charge Control</h4>
+            <p class="text-muted mb-0" style="font-size:13px;">
+                Turn Penalty and Special Occasion (free temporary cars) on or off.
+            </p>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadSettings()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Toast -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index:9999">
+        <div id="toast" class="toast align-items-center text-white border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMsg"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- Penalty -->
+        <div class="col-lg-6">
+            <div class="settings-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0">⚠️ Penalty</h6>
+                    <span id="penaltyBadge" class="status-badge badge-disabled">INACTIVE</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background:#f8f9fa;">
+                    <div>
+                        <div class="fw-semibold" style="font-size:14px;">Penalty Active</div>
+                        <div class="text-muted" style="font-size:12px;">ON = penalty is applied &nbsp;|&nbsp; OFF = no penalty</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="togglePenalty" onchange="changeSetting('isPenaltyActive', this)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Special Occasion -->
+        <div class="col-lg-6">
+            <div class="settings-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0">🎉 Special Occasion</h6>
+                    <span id="specialBadge" class="status-badge badge-disabled">INACTIVE</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-3 rounded mb-3" style="background:#f8f9fa;">
+                    <div>
+                        <div class="fw-semibold" style="font-size:14px;">Special Occasion Active</div>
+                        <div class="text-muted" style="font-size:12px;">ON = temporary cars free entry &amp; exit &nbsp;|&nbsp; OFF = charges active</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleSpecial" onchange="changeSetting('IsSpecialOccasionActive', this)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <table class="table table-sm mb-0" style="font-size:13px;">
+                    <tr><td class="text-muted">Activated At</td><td id="specialAt" class="fw-semibold">—</td></tr>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.className = `toast align-items-center text-white border-0 bg-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'danger'}`;
+            document.getElementById('toastMsg').textContent = msg;
+            new bootstrap.Toast(toast, { delay: 4000 }).show();
+        }
+
+        function setBadge(id, on) {
+            const el = document.getElementById(id);
+            el.textContent = on ? 'ACTIVE' : 'INACTIVE';
+            el.className = `status-badge ${on ? 'badge-enabled' : 'badge-disabled'}`;
+        }
+
+        function loadSettings() {
+            fetch('/ChargeControl/GetSettings')
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) { showToast(res.message || 'Failed to load', 'danger'); return; }
+
+                    document.getElementById('togglePenalty').checked = res.isPenaltyActive;
+                    document.getElementById('toggleSpecial').checked = res.isSpecialOccasionActive;
+                    setBadge('penaltyBadge', res.isPenaltyActive);
+                    setBadge('specialBadge', res.isSpecialOccasionActive);
+                    document.getElementById('specialAt').textContent = res.specialOccasionActivatedAt || '—';
+                });
+        }
+
+        function changeSetting(name, checkbox) {
+            const enable = checkbox.checked;
+            const label = name === 'isPenaltyActive' ? 'Penalty' : 'Special Occasion';
+
+            if (!confirm(`${enable ? 'Activate' : 'Deactivate'} ${label}?`)) {
+                checkbox.checked = !enable;
+                return;
+            }
+
+            fetch('/ChargeControl/SetSetting', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settingName: name, enable: enable })
+            }).then(r => r.json()).then(res => {
+                showToast(res.message, res.success ? 'success' : 'danger');
+                if (!res.success) checkbox.checked = !enable;
+                loadSettings();
+            }).catch(() => {
+                showToast('Request failed', 'danger');
+                checkbox.checked = !enable;
+            });
+        }
+
+        loadSettings();
+    </script>
+}
