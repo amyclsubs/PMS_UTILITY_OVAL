@@ -231,7 +231,7 @@ namespace AmaanParkingSystem.Services
                     string subject = $"🅿️ Action Required: Move Your Vehicle to B2 Parking or Visitor Rates Will Apply – {car.car_plate_no ?? car.cardno}";
                     string body = BuildEmailBody(subCo, new System.Collections.Generic.List<B2PendingEntry> { car });
 
-                    bool ok = await SendEmailAsync(smtp, subCo.Email, subject, body);
+                    bool ok = await SendEmailAsync(smtp, subCo.Email, subject, body, await GetOwnerEmailAsync(car.cardno));
 
                     if (ok)
                     {
@@ -457,6 +457,30 @@ namespace AmaanParkingSystem.Services
             }
         }
 
+        // NEW: car owner email from cards table (matched by card no)
+        private async Task<string> GetOwnerEmailAsync(string cardNo)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(cardNo)) return null;
+
+                using var conn = new SqlConnection(GetConnectionString());
+
+                return await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT TOP 1 LTRIM(RTRIM([car_owner_email]))
+                    FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                    WHERE LTRIM(RTRIM([cardno])) = @CardNo
+                      AND [car_owner_email] IS NOT NULL
+                      AND LTRIM(RTRIM([car_owner_email])) <> ''",
+                    new { CardNo = cardNo.Trim() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("[B2 Notify] ⚠️ Owner email lookup failed for card {CardNo}: {Message}", cardNo, ex.Message);
+                return null;
+            }
+        }
+
         private async Task<SubCoInfo> GetSubCompanyAsync(string subCoId)
         {
             try
@@ -518,7 +542,7 @@ namespace AmaanParkingSystem.Services
         private async Task<bool> SendEmailAsync(
             (string server, int port, string username, string password,
              string fromEmail, string fromName, bool ssl) smtp,
-            string toEmail, string subject, string body)
+            string toEmail, string subject, string body, string ccEmail = null)
         {
             try
             {
@@ -538,6 +562,17 @@ namespace AmaanParkingSystem.Services
                 };
 
                 message.To.Add(toEmail);
+
+                // NEW: car owner in CC (invalid address must never block the company email)
+                if (!string.IsNullOrWhiteSpace(ccEmail)
+                    && !string.Equals(ccEmail.Trim(), toEmail?.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    try { message.CC.Add(new MailAddress(ccEmail.Trim())); }
+                    catch (Exception ccEx)
+                    {
+                        _logger.LogWarning("[B2 Notify] ⚠️ Invalid owner email '{Cc}' ignored: {Msg}", ccEmail, ccEx.Message);
+                    }
+                }
                 await client.SendMailAsync(message);
                 await LogToEmailTableAsync(toEmail, subject, "B2-Notification", "Sent", null);
                 return true;
@@ -661,7 +696,7 @@ namespace AmaanParkingSystem.Services
                     string subject = $"⚠️ Penalty Notice: Car Limit Exceeded – {car.car_plate_no ?? car.cardno}";
                     string body = BuildPenaltyEmailBody(subCo, car);
 
-                    bool ok = await SendEmailAsync(smtp, subCo.Email, subject, body);
+                    bool ok = await SendEmailAsync(smtp, subCo.Email, subject, body, await GetOwnerEmailAsync(car.cardno));
                     if (ok)
                     {
                         sent++;
