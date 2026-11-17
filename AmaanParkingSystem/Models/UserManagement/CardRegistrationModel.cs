@@ -15,6 +15,7 @@
         public string car_plate_no { get; set; }
         public string car_owner_name { get; set; }
         public string car_owner_contact_no { get; set; }
+        public string car_owner_email { get; set; }
         public string applicationform { get; set; }
         public string fee_schedule_id { get; set; }
         public string expiry_date { get; set; }

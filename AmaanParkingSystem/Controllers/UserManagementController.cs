@@ -816,7 +816,7 @@ public class UserManagementController : BaseController
                 SET customer_id=@customer_id, car_parkers_company_id=@car_parkers_company_id, 
                     car_parkers_company_name=@car_parkers_company_name, car_parkers_sub_co_id=@car_parkers_sub_co_id, 
                     car_parkers_sub_co_name=@car_parkers_sub_co_name, cardno=@cardno, cardname=@cardname, 
-                    car_owner_name=@car_owner_name, car_owner_contact_no=@car_owner_contact_no, 
+                    car_owner_name=@car_owner_name, car_owner_contact_no=@car_owner_contact_no, car_owner_email=@car_owner_email, 
                     car_plate_no=@car_plate_no, card_type=@card_type, status=@status, 
                     fee_schedule_id=@fee_schedule_id, applicationform=@applicationform, 
                     expiry_date=@expiry_date, access_rights=@access_rights, antipassback=@antipassback, 
@@ -833,6 +833,7 @@ public class UserManagementController : BaseController
                     model.cardname,
                     model.car_owner_name,
                     model.car_owner_contact_no,
+                    model.car_owner_email,
                     model.car_plate_no,
                     card_type = cardType,
                     model.status,
@@ -857,7 +858,10 @@ public class UserManagementController : BaseController
                         @plate, @ctype, @status, @fees, @app, @expiry, @rights, @apb, @grp, @user, GETDATE());
                 UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
                 SET parking_no = @parking_no
-                WHERE id = SCOPE_IDENTITY() AND @parking_no IS NOT NULL;", new
+                WHERE id = SCOPE_IDENTITY() AND @parking_no IS NOT NULL;
+                UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                SET car_owner_email = @car_owner_email
+                WHERE id = SCOPE_IDENTITY() AND @car_owner_email IS NOT NULL;", new
                 {
                     customer_id = subCompanyInfo.customer_id,
                     company_id = subCompanyInfo.car_parkers_company_id,
@@ -877,6 +881,7 @@ public class UserManagementController : BaseController
                     rights = assignedRights,
                     apb = model.antipassback,
                     grp = model.grouped,
+                    car_owner_email = model.car_owner_email,
                     parking_no = parkingToSave,
                     user = currentUser
                 });

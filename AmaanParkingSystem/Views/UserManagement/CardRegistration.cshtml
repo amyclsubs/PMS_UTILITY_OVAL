@@ -115,6 +115,10 @@
                 <!-- Row: Parking Allocation (vacant only) -->
                 <div class="row mb-3">
                     <div class="col-md-3">
+                        <label class="form-label">Owner Email</label>
+                        <input asp-for="car_owner_email" type="email" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">Allocate Parking (Vacant only)</label>
                         <select name="allocated_parking_no" id="parkingDropdown" class="form-control form-control-sm">
                             <option value="">-- No Parking --</option>
@@ -349,7 +353,7 @@
                         <th>Updated By</th>
                         <th>Updated On</th>
                         <th>Parking No</th>
-                        <th>Actions</th>
+                        <th>Owner Email</th>                        <th>Actions</th>
                     </tr>
                 </thead>
 
@@ -464,6 +468,7 @@
                                     <span class="text-muted">-</span>
                                 }
                             </td>
+                            <td>@c.car_owner_email</td>
                             <td style="white-space: nowrap;">
                                 @if (ViewBag.CanWrite == true)
                                 {
