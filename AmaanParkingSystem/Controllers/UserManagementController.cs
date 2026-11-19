@@ -163,6 +163,13 @@ public class UserManagementController : BaseController
             parkingMap[(string)pr.id] = (string)pr.parking_no;
         }
         ViewBag.ParkingMap = parkingMap;
+
+        // ===== Cards with notifications turned OFF (for list column) =====
+        var notifOffIds = conn.Query<string>(@"
+            SELECT CAST(id AS NVARCHAR(50))
+            FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+            WHERE ISNULL(TRY_CAST([Notifications] AS INT), 1) = 0").ToHashSet();
+        ViewBag.NotifOffIds = notifOffIds;
         ViewBag.SortColumn = sortColumn;
         ViewBag.SortOrder = sortOrder;
 
@@ -215,6 +222,18 @@ public class UserManagementController : BaseController
             currentParking = currentParking.Trim();
         }
         ViewBag.CurrentParkingNo = currentParking;
+
+        // ===== Notification flag (default = send) =====
+        bool notifEnabled = true;
+        if (id.HasValue && id.Value > 0)
+        {
+            var notifVal = conn.QueryFirstOrDefault<int?>(@"
+                SELECT ISNULL(TRY_CAST([Notifications] AS INT), 1)
+                FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                WHERE id = @id", new { id = id.Value });
+            notifEnabled = (notifVal ?? 1) != 0;
+        }
+        ViewBag.NotificationsEnabled = notifEnabled;
         ViewBag.VacantParkings = conn.Query(@"
             SELECT CAST(pl.parking_no AS NVARCHAR(100)) AS parking_no,
                    ISNULL(zn.zone_name, '') AS zone_name
@@ -707,7 +726,7 @@ public class UserManagementController : BaseController
     }
 
     [HttpPost]
-    public IActionResult AddOrEditCard(CardRegistrationModel model, string[] zoneCheckboxes, string allocated_parking_no = null)
+    public IActionResult AddOrEditCard(CardRegistrationModel model, string[] zoneCheckboxes, string allocated_parking_no = null, bool send_notification = true)
     {
         using (var conn = new SqlConnection(GetDynamicConnectionString()))
         {
@@ -820,7 +839,7 @@ public class UserManagementController : BaseController
                     car_plate_no=@car_plate_no, card_type=@card_type, status=@status, 
                     fee_schedule_id=@fee_schedule_id, applicationform=@applicationform, 
                     expiry_date=@expiry_date, access_rights=@access_rights, antipassback=@antipassback, 
-                    grouped=@grouped, parking_no=@parking_no, updated_by=@updated_by, updated_on=GETDATE()
+                    grouped=@grouped, parking_no=@parking_no, Notifications=@Notifications, updated_by=@updated_by, updated_on=GETDATE()
                 WHERE id=@id", new
                 {
                     model.id,
@@ -841,6 +860,7 @@ public class UserManagementController : BaseController
                     model.applicationform,
                     model.expiry_date,
                     access_rights = assignedRights,
+                    Notifications = send_notification ? 1 : 0,
                     parking_no = parkingToSave,
                     model.antipassback,
                     model.grouped,
@@ -861,7 +881,10 @@ public class UserManagementController : BaseController
                 WHERE id = SCOPE_IDENTITY() AND @parking_no IS NOT NULL;
                 UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
                 SET car_owner_email = @car_owner_email
-                WHERE id = SCOPE_IDENTITY() AND @car_owner_email IS NOT NULL;", new
+                WHERE id = SCOPE_IDENTITY() AND @car_owner_email IS NOT NULL;
+                UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                SET Notifications = @Notifications
+                WHERE id = SCOPE_IDENTITY();", new
                 {
                     customer_id = subCompanyInfo.customer_id,
                     company_id = subCompanyInfo.car_parkers_company_id,
@@ -882,6 +905,7 @@ public class UserManagementController : BaseController
                     apb = model.antipassback,
                     grp = model.grouped,
                     car_owner_email = model.car_owner_email,
+                    Notifications = send_notification ? 1 : 0,
                     parking_no = parkingToSave,
                     user = currentUser
                 });

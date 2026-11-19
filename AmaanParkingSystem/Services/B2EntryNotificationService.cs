@@ -437,6 +437,10 @@ namespace AmaanParkingSystem.Services
                     FROM dbo.[db_tbl_14_car_enterd]
                     WHERE [action_status] = 'Entered'
                       AND [card_type] IN ('DAILY_ACCESS', 'SEASONAL')
+                      AND NOT EXISTS (
+                            SELECT 1 FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated] nca
+                            WHERE LTRIM(RTRIM(nca.[cardno])) = LTRIM(RTRIM(dbo.[db_tbl_14_car_enterd].[cardno]))
+                              AND ISNULL(TRY_CAST(nca.[Notifications] AS INT), 1) = 0)
                       AND ([B2_entry_time] IS NULL OR ([B2_exit_time] IS NOT NULL AND [B2_exit_time] >= [B2_entry_time]))
                       AND ([B2EntryTime]   IS NULL OR ([B2ExitTime]   IS NOT NULL AND [B2ExitTime]   >= [B2EntryTime]))
                       AND ([TB1EntryTime]  IS NULL OR ([TB1ExitTime]  IS NOT NULL AND [TB1ExitTime]  >= [TB1EntryTime]))
@@ -774,7 +778,10 @@ namespace AmaanParkingSystem.Services
                           AND TRY_CAST(c.[Total_Cars_allowed] AS INT) > 0
                     ) x
                     WHERE x.CarRank > x.TotalCarsAllowed
-                    ORDER BY x.[entry_time] ASC;";
+                      AND NOT EXISTS (
+                            SELECT 1 FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated] nca
+                            WHERE LTRIM(RTRIM(nca.[cardno])) = LTRIM(RTRIM(x.[cardno]))
+                              AND ISNULL(TRY_CAST(nca.[Notifications] AS INT), 1) = 0)                    ORDER BY x.[entry_time] ASC;";
 
                 return (await conn.QueryAsync<B2PenaltyEntry>(sql)).ToList();
             }

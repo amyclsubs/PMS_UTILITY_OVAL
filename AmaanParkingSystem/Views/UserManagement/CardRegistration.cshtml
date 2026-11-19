@@ -10,6 +10,7 @@
     // Get duplicate plate numbers from ViewBag
     var duplicatePlateNumbers = ViewBag.DuplicatePlateNumbers as HashSet<string> ?? new HashSet<string>();
     var parkingMap = ViewBag.ParkingMap as Dictionary<string, string> ?? new Dictionary<string, string>();
+    var notifOffIds = ViewBag.NotifOffIds as HashSet<string> ?? new HashSet<string>();
     // Find duplicate Owner Contact numbers
     var ownerContactGroups = cardList
         .Where(c => !string.IsNullOrEmpty(c.car_owner_contact_no))
@@ -117,6 +118,12 @@
                     <div class="col-md-3">
                         <label class="form-label">Owner Email</label>
                         <input asp-for="car_owner_email" type="email" class="form-control form-control-sm" />
+                        <div class="form-check mt-1">
+                            <input type="hidden" name="send_notification" value="false" />
+                            <input class="form-check-input" type="checkbox" name="send_notification" value="true" id="sendNotification"
+                                   @(((bool?)ViewBag.NotificationsEnabled ?? true) ? "checked" : "") />
+                            <label class="form-check-label small" for="sendNotification">Send Notifications (Card &amp; Company)</label>
+                        </div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Allocate Parking (Vacant only)</label>
@@ -353,7 +360,9 @@
                         <th>Updated By</th>
                         <th>Updated On</th>
                         <th>Parking No</th>
-                        <th>Owner Email</th>                        <th>Actions</th>
+                        <th>Owner Email</th>
+                        <th>Notifications</th>                        
+                        <th>Actions</th>
                     </tr>
                 </thead>
 
@@ -469,7 +478,16 @@
                                 }
                             </td>
                             <td>@c.car_owner_email</td>
-                            <td style="white-space: nowrap;">
+                            <td style="text-align: center;">
+                                @if (notifOffIds.Contains(c.id.ToString()))
+                                {
+                                    <span style="background-color: #dc3545; color: white; font-weight: bold; padding: 3px 6px; font-size: 9px; border-radius: 3px; display: inline-block;">OFF</span>
+                                }
+                                else
+                                {
+                                    <span style="background-color: #28a745; color: white; font-weight: bold; padding: 3px 6px; font-size: 9px; border-radius: 3px; display: inline-block;">ON</span>
+                                }
+                            </td>                            <td style="white-space: nowrap;">
                                 @if (ViewBag.CanWrite == true)
                                 {
                                 <a href="@Url.Action("CardRegistration", "UserManagement", new { id = c.id })"
