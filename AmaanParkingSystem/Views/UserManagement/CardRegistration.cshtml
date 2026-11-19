@@ -119,9 +119,9 @@
                         <label class="form-label">Owner Email</label>
                         <input asp-for="car_owner_email" type="email" class="form-control form-control-sm" />
                         <div class="form-check mt-1">
-                            <input type="hidden" name="send_notification" value="false" />
                             <input class="form-check-input" type="checkbox" name="send_notification" value="true" id="sendNotification"
                                    @(((bool?)ViewBag.NotificationsEnabled ?? true) ? "checked" : "") />
+                            <input type="hidden" name="send_notification" value="false" />
                             <label class="form-check-label small" for="sendNotification">Send Notifications (Card &amp; Company)</label>
                         </div>
                     </div>
