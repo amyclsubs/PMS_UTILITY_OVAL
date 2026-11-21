@@ -819,7 +819,16 @@
                 </button>
 
                 <hr />
-                <h6 class="text-primary">Step 2: Enter the cards (tip: paste rows copied from Excel into any cell)</h6>
+                    <h6 class="text-primary">Step 2: Enter the cards (tip: paste rows copied from Excel into any cell)</h6>
+                    <div class="d-flex gap-2 mb-2 align-items-center">
+                        <a class="btn btn-outline-success btn-sm" href="/UserManagement/DownloadBulkCardTemplate">
+                            <i class="fas fa-download"></i> Download Excel Format
+                        </a>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('bulkImportFile').click()">
+                            <i class="fas fa-file-import"></i> Import Excel
+                        </button>
+                        <input type="file" id="bulkImportFile" accept=".xlsx" style="display:none" onchange="bulkImportExcel(this)" />
+                    </div>
                 <fieldset id="bulkGridFields" disabled>
                     <table class="bulk-table">
                         <thead>
@@ -829,8 +838,11 @@
                                 <th>Card Name</th>
                                 <th>Card Holder</th>
                                 <th>Owner Contact</th>
-                                <th>LPR No</th>
-                                <th></th>
+                                    <th>LPR No</th>
+                                    <th>Owner Email</th>
+                                    <th>Parking No</th>
+                                    <th>Notifications</th>
+                                    <th></th>
                             </tr>
                         </thead>
                         <tbody id="bulkTbody"></tbody>
@@ -865,7 +877,10 @@
             '<td><input class="form-control form-control-sm bulk-in bulk-cardname" /></td>' +
             '<td><input class="form-control form-control-sm bulk-in bulk-holder" /></td>' +
             '<td><input class="form-control form-control-sm bulk-in bulk-contact" /></td>' +
-            '<td><input class="form-control form-control-sm bulk-in bulk-plate" /></td>' +
+                    '<td><input class="form-control form-control-sm bulk-in bulk-plate" /></td>' +
+                    '<td><input class="form-control form-control-sm bulk-in bulk-email" /></td>' +
+                    '<td><input class="form-control form-control-sm bulk-in bulk-parking" /></td>' +
+                    '<td><select class="form-control form-control-sm bulk-in bulk-notif"><option value="ON">ON</option><option value="OFF">OFF</option></select></td>' +
             '<td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" onclick="bulkRemoveRow(this)">&times;</button></td>';
     }
 
@@ -931,7 +946,68 @@
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkCardModal')).show();
     }
 
-    function bulkSubCoChange() {
+            function bulkSetCell(tr, cls, val) {
+                    var el = tr.querySelector('.' + cls);
+                    if (!el) return;
+                    if (cls === 'bulk-notif') {
+                        var u = (val || '').toString().trim().toUpperCase();
+                        el.value = (u === 'OFF' || u === '0' || u === 'NO' || u === 'FALSE') ? 'OFF' : 'ON';
+                    } else {
+                        el.value = val || '';
+                    }
+                }
+
+                async function bulkImportExcel(input) {
+                    var file = input.files && input.files[0];
+                    if (!file) return;
+
+                    var fd = new FormData();
+                    fd.append('file', file);
+
+                    try {
+                        var response = await fetch('/UserManagement/ImportBulkCardExcel', { method: 'POST', body: fd });
+                        var result = await response.json();
+
+                        if (!result.success) { alert(result.message || 'Import failed.'); return; }
+
+                        var data = result.rows || [];
+                        if (data.length === 0) { alert('No data rows found in the Excel file.'); return; }
+
+                        bulkClearErrors();
+
+                        var tbody = document.getElementById('bulkTbody');
+
+                        // remove empty rows before importing
+                        Array.from(tbody.querySelectorAll('tr')).forEach(function (tr) {
+                            var hasData = Array.from(tr.querySelectorAll('.bulk-in')).some(function (i) {
+                                return i.tagName !== 'SELECT' && i.value.trim() !== '';
+                            });
+                            if (!hasData) tr.remove();
+                        });
+
+                        data.forEach(function (d) {
+                            bulkAddRows(1);
+                            var tr = tbody.lastElementChild;
+                            bulkSetCell(tr, 'bulk-cardno', d.cardno);
+                            bulkSetCell(tr, 'bulk-cardname', d.cardname);
+                            bulkSetCell(tr, 'bulk-holder', d.holder);
+                            bulkSetCell(tr, 'bulk-contact', d.contact);
+                            bulkSetCell(tr, 'bulk-plate', d.plate);
+                            bulkSetCell(tr, 'bulk-email', d.email);
+                            bulkSetCell(tr, 'bulk-parking', d.parking);
+                            bulkSetCell(tr, 'bulk-notif', d.notif);
+                        });
+
+                        bulkRenumber();
+                        if (result.truncated) alert('Only the first 500 rows were imported.');
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    } finally {
+                        input.value = '';
+                    }
+                }
+
+                function bulkSubCoChange() {
         var id = document.getElementById('bulkSubCo').value;
         document.getElementById('bulkCompanyName').value = '';
         document.getElementById('bulkCardType').value = '';
@@ -958,7 +1034,7 @@
         if (!text || (text.indexOf('\n') < 0 && text.indexOf('\t') < 0)) return;
         e.preventDefault();
 
-        var cols = ['bulk-cardno', 'bulk-cardname', 'bulk-holder', 'bulk-contact', 'bulk-plate'];
+                var cols = ['bulk-cardno', 'bulk-cardname', 'bulk-holder', 'bulk-contact', 'bulk-plate', 'bulk-email', 'bulk-parking', 'bulk-notif'];
         var startCol = 0;
         cols.forEach(function (c, i) { if (target.classList.contains(c)) startCol = i; });
 
@@ -972,7 +1048,7 @@
             if (!tr) { bulkAddRows(1); tr = tbody.lastElementChild; }
             line.split('\t').forEach(function (val, ci) {
                 var col = startCol + ci;
-                if (col < cols.length) tr.querySelector('.' + cols[col]).value = val.trim();
+                        if (col < cols.length) bulkSetCell(tr, cols[col], val.trim());
             });
             tr = tr.nextElementSibling;
         });
@@ -992,9 +1068,12 @@
                 CardName: v('.bulk-cardname'),
                 OwnerName: v('.bulk-holder'),
                 OwnerContact: v('.bulk-contact'),
-                PlateNo: v('.bulk-plate')
+                        PlateNo: v('.bulk-plate'),
+                        OwnerEmail: v('.bulk-email'),
+                        ParkingNo: v('.bulk-parking'),
+                        Notifications: v('.bulk-notif')
             };
-            if (row.CardNo || row.CardName || row.OwnerName || row.OwnerContact || row.PlateNo) rows.push(row);
+                    if (row.CardNo || row.CardName || row.OwnerName || row.OwnerContact || row.PlateNo || row.OwnerEmail || row.ParkingNo) rows.push(row);
         });
 
         if (rows.length === 0) { alert('Please enter at least one card.'); return; }

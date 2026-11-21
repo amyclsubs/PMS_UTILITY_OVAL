@@ -573,7 +573,10 @@ public class UserManagementController : BaseController
                     CardName = (r.CardName ?? "").Trim(),
                     OwnerName = (r.OwnerName ?? "").Trim(),
                     OwnerContact = (r.OwnerContact ?? "").Trim(),
-                    PlateNo = (r.PlateNo ?? "").Trim()
+                    PlateNo = (r.PlateNo ?? "").Trim(),
+                    OwnerEmail = (r.OwnerEmail ?? "").Trim(),
+                    ParkingNo = (r.ParkingNo ?? "").Trim(),
+                    Notifications = (r.Notifications ?? "").Trim()
                 }).ToList();
 
             var errors = new List<object>();
@@ -616,6 +619,35 @@ public class UserManagementController : BaseController
 
                     foreach (var r in rows.Where(x => !string.IsNullOrEmpty(x.CardNo) && existingNos.Contains(x.CardNo.ToLower())))
                         AddErr(r.RowNo, $"Card No '{r.CardNo}' already exists");
+                }
+
+                // ===== Owner Email / Parking validation (new columns) =====
+                foreach (var r in rows.Where(x => !string.IsNullOrEmpty(x.OwnerEmail) && !x.OwnerEmail.Contains("@")))
+                    AddErr(r.RowNo, $"Owner Email '{r.OwnerEmail}' is invalid");
+
+                foreach (var g in rows.Where(x => !string.IsNullOrEmpty(x.ParkingNo))
+                                      .GroupBy(x => x.ParkingNo.ToLower()).Where(g => g.Count() > 1))
+                    foreach (var r in g)
+                        AddErr(r.RowNo, $"Parking '{r.ParkingNo}' is repeated in this list");
+
+                if (rows.Any(x => !string.IsNullOrEmpty(x.ParkingNo)))
+                {
+                    var layoutParkings = conn.Query<string>(@"
+                        SELECT LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100))))
+                        FROM [AMAAN_PMS].[dbo].[db_tbl_31_Parking_layout]").ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    var takenParkings = conn.Query<string>(@"
+                        SELECT LTRIM(RTRIM(CAST(parking_no AS NVARCHAR(100))))
+                        FROM [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                        WHERE parking_no IS NOT NULL").ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var r in rows.Where(x => !string.IsNullOrEmpty(x.ParkingNo)))
+                    {
+                        if (!layoutParkings.Contains(r.ParkingNo))
+                            AddErr(r.RowNo, $"Parking '{r.ParkingNo}' does not exist");
+                        else if (takenParkings.Contains(r.ParkingNo))
+                            AddErr(r.RowNo, $"Parking '{r.ParkingNo}' is already allocated to another card");
+                    }
                 }
 
                 var cardNames = rows.Where(x => !string.IsNullOrEmpty(x.CardName))
@@ -667,6 +699,9 @@ public class UserManagementController : BaseController
                     owner = string.IsNullOrEmpty(r.OwnerName) ? null : r.OwnerName,
                     contact = string.IsNullOrEmpty(r.OwnerContact) ? null : r.OwnerContact,
                     plate = string.IsNullOrEmpty(r.PlateNo) ? null : r.PlateNo,
+                    email = string.IsNullOrEmpty(r.OwnerEmail) ? null : r.OwnerEmail,
+                    parking = string.IsNullOrEmpty(r.ParkingNo) ? null : r.ParkingNo,
+                    notif = IsBulkNotifOff(r.Notifications) ? 0 : 1,
                     ctype = cardType,
                     status = request.Status,
                     fees = request.FeeScheduleId,
@@ -690,6 +725,12 @@ public class UserManagementController : BaseController
                     VALUES (@customer_id, @company_id, @company_name, @sub_id, @sub_name, @cardno, @cardname, @owner, @contact, 
                             @plate, @ctype, @status, @fees, @app, @expiry, @rights, @apb, @grp, @user, GETDATE())", items, tran);
 
+                    // New columns: email / parking / notifications (card no is already validated as unique)
+                    conn.Execute(@"
+                    UPDATE [AMAAN_PMS].[dbo].[db_tbl_11_cards_allocated]
+                    SET car_owner_email = @email, parking_no = @parking, Notifications = @notif
+                    WHERE LTRIM(RTRIM(LOWER(cardno))) = LTRIM(RTRIM(LOWER(@cardno)))", items, tran);
+
                     tran.Commit();
                 }
 
@@ -702,6 +743,152 @@ public class UserManagementController : BaseController
         }
     }
 
+    private static bool IsBulkNotifOff(string v)
+    {
+        var u = (v ?? "").Trim().ToUpper();
+        return u == "OFF" || u == "0" || u == "NO" || u == "FALSE";
+    }
+
+    private static int BulkColumnIndex(string header)
+    {
+        var h = new string((header ?? "").ToLower().Where(c => char.IsLetterOrDigit(c)).ToArray());
+        if (h.StartsWith("cardno")) return 0;
+        if (h.StartsWith("cardname")) return 1;
+        if (h.StartsWith("cardholder") || h.StartsWith("ownername")) return 2;
+        if (h.StartsWith("ownercontact")) return 3;
+        if (h.StartsWith("lpr") || h.StartsWith("plate")) return 4;
+        if (h.StartsWith("owneremail") || h.StartsWith("email")) return 5;
+        if (h.StartsWith("parking")) return 6;
+        if (h.StartsWith("notification")) return 7;
+        return -1;
+    }
+
+    [HttpGet]
+    public IActionResult DownloadBulkCardTemplate()
+    {
+        var workbook = new XSSFWorkbook();
+        var sheet = workbook.CreateSheet("Cards");
+
+        var headerStyle = workbook.CreateCellStyle();
+        var headerFont = workbook.CreateFont();
+        headerFont.IsBold = true;
+        headerFont.Color = IndexedColors.White.Index;
+        headerStyle.SetFont(headerFont);
+        headerStyle.FillForegroundColor = IndexedColors.Blue.Index;
+        headerStyle.FillPattern = FillPattern.SolidForeground;
+        headerStyle.Alignment = HorizontalAlignment.Center;
+
+        // Text format so card numbers / contacts are not changed by Excel
+        var textStyle = workbook.CreateCellStyle();
+        textStyle.DataFormat = workbook.CreateDataFormat().GetFormat("@");
+
+        string[] headers = new[]
+        {
+            "Card No *", "Card Name", "Card Holder", "Owner Contact",
+            "LPR No", "Owner Email", "Parking No", "Notifications (ON/OFF)"
+        };
+
+        var headerRow = sheet.CreateRow(0);
+        for (int i = 0; i < headers.Length; i++)
+        {
+            var cell = headerRow.CreateCell(i);
+            cell.SetCellValue(headers[i]);
+            cell.CellStyle = headerStyle;
+            sheet.SetDefaultColumnStyle(i, textStyle);
+            sheet.SetColumnWidth(i, 6000);
+        }
+        sheet.CreateFreezePane(0, 1);
+
+        var info = workbook.CreateSheet("Instructions");
+        info.SetColumnWidth(0, 18000);
+        info.CreateRow(0).CreateCell(0).SetCellValue("Fill cards in the 'Cards' sheet from row 2. Do not change the headers.");
+        info.CreateRow(1).CreateCell(0).SetCellValue("Card No is required. Parking No must be a vacant parking (optional).");
+        info.CreateRow(2).CreateCell(0).SetCellValue("Notifications: ON or OFF (blank = ON). Max 500 rows.");
+
+        byte[] fileBytes;
+        using (var stream = new MemoryStream())
+        {
+            workbook.Write(stream, true);
+            fileBytes = stream.ToArray();
+        }
+        workbook.Close();
+
+        return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Bulk_Card_Template.xlsx");
+    }
+
+    [HttpPost]
+    public IActionResult ImportBulkCardExcel(Microsoft.AspNetCore.Http.IFormFile file)
+    {
+        try
+        {
+            if (file == null || file.Length == 0)
+                return Json(new { success = false, message = "Please select an Excel file." });
+
+            if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                return Json(new { success = false, message = "Only .xlsx files are supported. Please use the downloaded format." });
+
+            var rows = new List<object>();
+            bool truncated = false;
+
+            using (var stream = file.OpenReadStream())
+            {
+                var wb = new XSSFWorkbook(stream);
+                var sheet = wb.GetSheetAt(0);
+                var fmt = new DataFormatter();
+                var eval = wb.GetCreationHelper().CreateFormulaEvaluator();
+
+                var headerRow = sheet.GetRow(sheet.FirstRowNum);
+                if (headerRow == null)
+                    return Json(new { success = false, message = "The Excel file is empty." });
+
+                var map = new Dictionary<int, int>();
+                int startCell = Math.Max((int)headerRow.FirstCellNum, 0);
+                for (int c = startCell; c < headerRow.LastCellNum; c++)
+                {
+                    var idx = BulkColumnIndex(fmt.FormatCellValue(headerRow.GetCell(c)));
+                    if (idx >= 0 && !map.ContainsValue(idx)) map[c] = idx;
+                }
+                if (map.Count == 0)
+                    for (int c = 0; c < 8; c++) map[c] = c;
+
+                for (int r = sheet.FirstRowNum + 1; r <= sheet.LastRowNum; r++)
+                {
+                    var row = sheet.GetRow(r);
+                    if (row == null) continue;
+
+                    var vals = Enumerable.Repeat("", 8).ToArray();
+                    foreach (var kv in map)
+                    {
+                        var cell = row.GetCell(kv.Key);
+                        vals[kv.Value] = cell == null ? "" : (fmt.FormatCellValue(cell, eval) ?? "").Trim();
+                    }
+
+                    if (vals.All(x => string.IsNullOrEmpty(x))) continue;
+
+                    if (rows.Count >= 500) { truncated = true; break; }
+
+                    rows.Add(new
+                    {
+                        cardno = vals[0],
+                        cardname = vals[1],
+                        holder = vals[2],
+                        contact = vals[3],
+                        plate = vals[4],
+                        email = vals[5],
+                        parking = vals[6],
+                        notif = IsBulkNotifOff(vals[7]) ? "OFF" : "ON"
+                    });
+                }
+            }
+
+            return Json(new { success = true, rows, truncated });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, message = "Error reading Excel: " + ex.Message });
+        }
+    }
+
     public class BulkCardRow
     {
         public int RowNo { get; set; }
@@ -710,6 +897,9 @@ public class UserManagementController : BaseController
         public string OwnerName { get; set; }
         public string OwnerContact { get; set; }
         public string PlateNo { get; set; }
+        public string OwnerEmail { get; set; }
+        public string ParkingNo { get; set; }
+        public string Notifications { get; set; }
     }
 
     public class BulkCardRequest
